@@ -30,10 +30,10 @@
 const MMIO_BASE: u32 = 0x3F00_0000;
 
 mod arm_debug;
+mod dmac;
 mod gpio;
 mod mbox;
 mod uart;
-mod dmac;
 
 extern crate alloc;
 extern crate nt_allocator;
