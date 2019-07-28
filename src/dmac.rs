@@ -9,16 +9,13 @@ pub struct DMAC {
     _some_data: u32,
 }
 
-extern crate static_assertions;
-
-
 #[allow(non_snake_case)]
 #[repr(C)]
 pub struct RegisterBlock {
     Channels: [DmaChannelRegister; 15], // ch 0 - 15
-    __reserved: [u32; 0x1bc],
+    __reserved: [u32; 0x38],
     INT_STATUS: ReadWrite<u32, GLOBAL_INT::Register>, // 0xfe0
-    __reserved1: [u32; 0xc],
+    __reserved1: [u32; 0x3],
     ENABLE: ReadWrite<u32, GLOBAL_INT::Register>, // 0xff0
 }
 
@@ -35,7 +32,7 @@ pub struct DmaChannelRegister {
     STRIDE: ReadWrite<u32, STRIDE::Register>,     // 0x18, CB word 4
     NEXTCONBK: u32,                               // 0x1c, CB word 5
     DEBUG: ReadWrite<u32, DEBUG::Register>,       // 0x20, debug
-    __reserved: [u32; 0xdc],                      // padding~ 0x100
+    __reserved: [u32; 0x37],                      // padding~ 0x100
 }
 
 register_bitfields! {
@@ -349,12 +346,18 @@ impl DMAC {
         self.Channels[0].CS.write(CS::RESET::Reset);
     }
 
-    fn assert(&self) {
-        // assert_eq!(core::mem::size_of::<RegisterBlock>(), 4);
-        
-        // unsafe { core::mem::transmute::<[u8; 4], RegisterBlock>([0]); }
+    fn __assert_size(&self) {
+        unsafe {
+            // compile time size assertion
+            const _DMA_REG_SIZE: usize = 0x100; // in bytes.
+            core::mem::transmute::<[u8; _DMA_REG_SIZE], DmaChannelRegister>([0; _DMA_REG_SIZE]);
+
+            const _REG_SIZE:usize = 0xff4;
+            core::mem::transmute::<[u8; _REG_SIZE], RegisterBlock>([0; _REG_SIZE]);
+
+        }
         //let mut a : ControlBlock = 0;
-    
+
         // let d = DMAC { _some_data : 0};
         // static_assertions::assert_eq_size_val!(d, 102);
     }
