@@ -26,7 +26,6 @@
 #![no_std]
 #![no_main]
 #![feature(asm)]
-#![feature(alloc)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
@@ -34,6 +33,7 @@ mod arm_debug;
 mod gpio;
 mod mbox;
 mod uart;
+mod dmac;
 
 extern crate alloc;
 extern crate nt_allocator;
@@ -79,7 +79,7 @@ fn alloc_test_u32(uart: &uart::Uart) {
     }
 }
 
-fn alloc_test_f64(uart: &uart::Uart) {
+fn _alloc_test_f64(uart: &uart::Uart) {
     let max: u32 = 32;
     let mut v: Vec<f64> = Vec::new();
     let mut last_pointer = 0 as *const f64;
@@ -139,6 +139,8 @@ fn kernel_entry() -> ! {
     // alloc_test_f64(&uart);
 
     uart.hex((float_test(0.1) * 100.1) as u32);
+
+    let dmac = dmac::DMAC::new();
 
     loop {}
 }

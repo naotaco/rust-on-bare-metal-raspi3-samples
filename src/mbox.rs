@@ -64,7 +64,7 @@ pub mod channel {
 
 // Tags
 pub mod tag {
-    pub const GETSERIAL: u32 = 0x10004;
+    pub const _GETSERIAL: u32 = 0x10004;
     pub const SETCLKRATE: u32 = 0x38002;
     pub const LAST: u32 = 0;
 }
