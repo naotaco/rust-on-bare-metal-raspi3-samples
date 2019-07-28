@@ -141,6 +141,7 @@ fn kernel_entry() -> ! {
     uart.hex((float_test(0.1) * 100.1) as u32);
 
     let dmac = dmac::DMAC::new();
+    dmac.reset();
 
     loop {}
 }
