@@ -9,10 +9,23 @@ pub struct DMAC {
     _some_data: u32,
 }
 
+extern crate static_assertions;
+
+
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct RegisterBlock {
+    Channels: [DmaChannelRegister; 15], // ch 0 - 15
+    __reserved: [u32; 0x1bc],
+    INT_STATUS: ReadWrite<u32, GLOBAL_INT::Register>, // 0xfe0
+    __reserved1: [u32; 0xc],
+    ENABLE: ReadWrite<u32, GLOBAL_INT::Register>, // 0xff0
+}
+
 #[allow(non_snake_case)]
 #[repr(C)]
 /// Only for ch 0-6. from 7th ch, differenct map is assigned.
-pub struct RegisterBlock {
+pub struct DmaChannelRegister {
     CS: ReadWrite<u32, CS::Register>,             // 0x00, Status
     CONBLK_AD: ReadWrite<u32>,                    // 0x04, Control block address
     TI: ReadWrite<u32, TI::Register>,             // 0x08, CB word 0
@@ -22,6 +35,7 @@ pub struct RegisterBlock {
     STRIDE: ReadWrite<u32, STRIDE::Register>,     // 0x18, CB word 4
     NEXTCONBK: u32,                               // 0x1c, CB word 5
     DEBUG: ReadWrite<u32, DEBUG::Register>,       // 0x20, debug
+    __reserved: [u32; 0xdc],                      // padding~ 0x100
 }
 
 register_bitfields! {
@@ -88,7 +102,40 @@ register_bitfields! {
         WAITS OFFSET(21) NUMBITS(5) [ ],
         /// peripheral mapping.
         /// peripheral number (1-31) used to control transfer rate. 0 for continuous.
-        PERMAP OFFSET(16) NUMBITS(5) [],
+        PERMAP OFFSET(16) NUMBITS(5) [
+            None = 0,
+            DSI = 1,
+            PCM_TX = 2,
+            PCM_RX = 3,
+            SMI = 4,
+            PWM = 5,
+            SPI_TX = 6,
+            SPI_RX = 7,
+            BSC_SPI_Slave_TX = 8,
+            BSC_SPI_Slave_RX = 9,
+            unused = 10,
+            EMMC = 11,
+            UART_TX = 12,
+            SD_HOST = 13,
+            UART_RX = 14,
+            DSI_ = 15,
+            SLIMBUS_MCTX = 16,
+            HDMI = 17,
+            SLIMBUS_MCRX = 18,
+            SLIMBUS_DC0 = 19,
+            SLIMBUS_DC1 = 20,
+            SLIMBUS_DC2 = 21,
+            SLIMBUS_DC3 = 22,
+            SLIMBUS_DC4 = 23,
+            Scaler_FIFO_0_SMI = 24,
+            Scaler_FIFO_1_SMI = 25,
+            Scaler_FIFO_2_SMI = 26,
+            SLIMBUS_DC5 = 27,
+            SLIMBUS_DC6 = 28,
+            SLIMBUS_DC7 = 29,
+            SLIMBUS_DC8 = 30,
+            SLIMBUS_DC9 = 31
+        ],
         /// number of bursts that DMA will try. 0 for single transfer.
         BURST_LENGTH OFFSET(12) NUMBITS(4) [],
         SRC_IGNORE OFFSET(11) NUMBITS(1) [
@@ -174,8 +221,92 @@ register_bitfields! {
         READ_LAST_NOT_SET_ERROR OFFSET(0) NUMBITS(1) [
             Clear = 1 // last signal was not send as expect. W1C.
         ]
+    ],
+    GLOBAL_INT[
+        // 31-16: reserved.
+        INT15 OFFSET(15) NUMBITS(1) [],
+        INT14 OFFSET(14) NUMBITS(1) [],
+        INT13 OFFSET(13) NUMBITS(1) [],
+        INT12 OFFSET(12) NUMBITS(1) [],
+        INT11 OFFSET(11) NUMBITS(1) [],
+        INT10 OFFSET(10) NUMBITS(1) [],
+        INT9 OFFSET(9) NUMBITS(1) [],
+        INT8 OFFSET(8) NUMBITS(1) [],
+        INT7 OFFSET(7) NUMBITS(1) [],
+        INT6 OFFSET(6) NUMBITS(1) [],
+        INT5 OFFSET(5) NUMBITS(1) [],
+        INT4 OFFSET(4) NUMBITS(1) [],
+        INT3 OFFSET(3) NUMBITS(1) [],
+        INT2 OFFSET(2) NUMBITS(1) [],
+        INT1 OFFSET(1) NUMBITS(1) [],
+        INT0 OFFSET(0) NUMBITS(1) []
+    ],
+    GLOBAL_ENABLE[
+        ENABLE15 OFFSET(15) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE14 OFFSET(14) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE13 OFFSET(13) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE12 OFFSET(12) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE11 OFFSET(11) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE10 OFFSET(10) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE9 OFFSET(9) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE8 OFFSET(8) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE7 OFFSET(7) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE6 OFFSET(6) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE5 OFFSET(5) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE4 OFFSET(4) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE3 OFFSET(3) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE2 OFFSET(2) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE1 OFFSET(1) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ],
+        ENABLE0 OFFSET(0) NUMBITS(1) [
+            Enable = 1,
+            Disable = 0
+        ]
     ]
-
 }
 
 /// Data structure used to order DMA settings/options.
@@ -214,6 +345,17 @@ impl DMAC {
 
     pub fn reset(&self) {
         // self.DR.set(c as u32);
-        self.CS.write(CS::RESET::Reset);
+        // self.Channels.CS[0].write(CS::RESET::Reset);
+        self.Channels[0].CS.write(CS::RESET::Reset);
+    }
+
+    fn assert(&self) {
+        // assert_eq!(core::mem::size_of::<RegisterBlock>(), 4);
+        
+        // unsafe { core::mem::transmute::<[u8; 4], RegisterBlock>([0]); }
+        //let mut a : ControlBlock = 0;
+    
+        // let d = DMAC { _some_data : 0};
+        // static_assertions::assert_eq_size_val!(d, 102);
     }
 }
