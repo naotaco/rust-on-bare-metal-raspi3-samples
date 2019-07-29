@@ -141,7 +141,9 @@ fn kernel_entry() -> ! {
     uart.hex((float_test(0.1) * 100.1) as u32);
 
     let dmac = dmac::DMAC::new();
-    dmac.reset();
+    let info = dmac::ControlBlock::new(0);
+    dmac.turn_on();
+    dmac.exec(&info);
 
     loop {}
 }

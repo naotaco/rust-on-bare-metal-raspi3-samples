@@ -16,7 +16,7 @@ pub struct RegisterBlock {
     __reserved: [u32; 0x38],
     INT_STATUS: ReadWrite<u32, GLOBAL_INT::Register>, // 0xfe0
     __reserved1: [u32; 0x3],
-    ENABLE: ReadWrite<u32, GLOBAL_INT::Register>, // 0xff0
+    ENABLE: ReadWrite<u32, GLOBAL_ENABLE::Register>, // 0xff0
 }
 
 #[allow(non_snake_case)]
@@ -311,13 +311,27 @@ register_bitfields! {
 /// Values ordered by these members can be observed on register as comment follows.
 #[repr(align(256))]
 pub struct ControlBlock {
-    transfer_information: u32,       // 0x00, accociated to TI register.
-    source_address: u32,             // 0x04, SOURCE_AD
-    destination_address: u32,        // 0x08, DEST_AD
-    transfer_length: u32,            // 0x0C, TXFR_LEN
-    two_d_mode_stride: u32,          // 0x10, STRIDE
-    next_control_block_address: u32, // 0x14, NEXTCONBK
+    pub transfer_information: u32,       // 0x00, accociated to TI register.
+    pub source_address: u32,             // 0x04, SOURCE_AD
+    pub destination_address: u32,        // 0x08, DEST_AD
+    pub transfer_length: u32,            // 0x0C, TXFR_LEN
+    pub two_d_mode_stride: u32,          // 0x10, STRIDE
+    pub next_control_block_address: u32, // 0x14, NEXTCONBK
     __reserved: [u32; 2],            // N/A
+}
+
+impl ControlBlock{
+    pub fn new(src:u32) -> ControlBlock{
+        ControlBlock{
+            transfer_information: (1 << 8) + (1 << 4),
+            source_address: 0x100_0160,
+            destination_address: 0x200_0000,
+            transfer_length:64,
+            two_d_mode_stride:0,
+            next_control_block_address:0,
+            __reserved: [0; 2],
+        }
+    }
 }
 
 const DMAC_BASE: u32 = super::MMIO_BASE + 0x7200;
@@ -346,19 +360,24 @@ impl DMAC {
         self.Channels[0].CS.write(CS::RESET::Reset);
     }
 
+    pub fn turn_on(&self){
+        self.ENABLE.write(GLOBAL_ENABLE::ENABLE0::Enable);
+    }
+
+    pub fn exec(&self, cs :&ControlBlock){
+        let raw_addr : *const ControlBlock = cs;
+        self.Channels[0].CONBLK_AD.set(raw_addr as u32);
+        self.Channels[0].CS.write(CS::ACTIVE::Enable);
+    }
+
     fn __assert_size(&self) {
         unsafe {
             // compile time size assertion
             const _DMA_REG_SIZE: usize = 0x100; // in bytes.
             core::mem::transmute::<[u8; _DMA_REG_SIZE], DmaChannelRegister>([0; _DMA_REG_SIZE]);
 
-            const _REG_SIZE:usize = 0xff4;
+            const _REG_SIZE: usize = 0xff4; // 0 - 0xff0
             core::mem::transmute::<[u8; _REG_SIZE], RegisterBlock>([0; _REG_SIZE]);
-
         }
-        //let mut a : ControlBlock = 0;
-
-        // let d = DMAC { _some_data : 0};
-        // static_assertions::assert_eq_size_val!(d, 102);
     }
 }
