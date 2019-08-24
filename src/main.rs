@@ -144,6 +144,7 @@ fn kernel_entry() -> ! {
     interrupt::disable();
     unsafe {
         interrupt::enable();
+        interrupt::test();
     }
 
     let dmac = dmac::DMAC::new();

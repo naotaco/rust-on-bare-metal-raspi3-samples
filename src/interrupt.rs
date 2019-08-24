@@ -60,6 +60,12 @@ pub unsafe fn enable() {
                  : "volatile");
 }
 
+// https://gist.github.com/heechul/3018642
+
+pub unsafe fn test(){
+    asm!("ldxr x0, [x1]"); // load exclusive
+}
+
 /// Critical section context
 ///
 /// Indicates that you are executing code within a critical section
