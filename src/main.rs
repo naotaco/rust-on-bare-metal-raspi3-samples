@@ -32,6 +32,7 @@ const MMIO_BASE: u32 = 0x3F00_0000;
 mod arm_debug;
 mod dmac;
 mod gpio;
+mod interrupt;
 mod mbox;
 mod uart;
 
@@ -139,6 +140,11 @@ fn kernel_entry() -> ! {
     // alloc_test_f64(&uart);
 
     uart.hex((float_test(0.1) * 100.1) as u32);
+
+    interrupt::disable();
+    unsafe {
+        interrupt::enable();
+    }
 
     let dmac = dmac::DMAC::new();
     let info = dmac::ControlBlock::new(0);

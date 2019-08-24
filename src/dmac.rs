@@ -317,18 +317,18 @@ pub struct ControlBlock {
     pub transfer_length: u32,            // 0x0C, TXFR_LEN
     pub two_d_mode_stride: u32,          // 0x10, STRIDE
     pub next_control_block_address: u32, // 0x14, NEXTCONBK
-    __reserved: [u32; 2],            // N/A
+    __reserved: [u32; 2],                // N/A
 }
 
-impl ControlBlock{
-    pub fn new(src:u32) -> ControlBlock{
-        ControlBlock{
+impl ControlBlock {
+    pub fn new(src: u32) -> ControlBlock {
+        ControlBlock {
             transfer_information: (1 << 8) + (1 << 4),
             source_address: 0x100_0160,
             destination_address: 0x200_0000,
-            transfer_length:64,
-            two_d_mode_stride:0,
-            next_control_block_address:0,
+            transfer_length: 64,
+            two_d_mode_stride: 0,
+            next_control_block_address: 0,
             __reserved: [0; 2],
         }
     }
@@ -360,12 +360,12 @@ impl DMAC {
         self.Channels[0].CS.write(CS::RESET::Reset);
     }
 
-    pub fn turn_on(&self){
+    pub fn turn_on(&self) {
         self.ENABLE.write(GLOBAL_ENABLE::ENABLE0::Enable);
     }
 
-    pub fn exec(&self, cs :&ControlBlock){
-        let raw_addr : *const ControlBlock = cs;
+    pub fn exec(&self, cs: &ControlBlock) {
+        let raw_addr: *const ControlBlock = cs;
         self.Channels[0].CONBLK_AD.set(raw_addr as u32);
         self.Channels[0].CS.write(CS::ACTIVE::Enable);
     }
