@@ -1,5 +1,5 @@
 use super::MMIO_BASE;
-use core::ops;
+use core::ops::{Deref, DerefMut};
 use register::{
     mmio::{ReadOnly, ReadWrite, WriteOnly},
     register_bitfields,
@@ -309,7 +309,7 @@ register_bitfields! {
 /// Data structure used to order DMA settings/options.
 /// Write data on DDR accordingly and tell it's address to DMA.
 /// Values ordered by these members can be observed on register as comment follows.
-#[repr(align(256))]
+#[repr(C, align(32))]
 pub struct ControlBlock {
     pub transfer_information: u32,       // 0x00, accociated to TI register.
     pub source_address: u32,             // 0x04, SOURCE_AD
@@ -336,7 +336,7 @@ impl ControlBlock {
 
 const DMAC_BASE: u32 = super::MMIO_BASE + 0x7200;
 
-impl ops::Deref for DMAC {
+impl core::ops::Deref for DMAC {
     type Target = RegisterBlock;
 
     fn deref(&self) -> &Self::Target {
@@ -379,5 +379,93 @@ impl DMAC {
             const _REG_SIZE: usize = 0xff4; // 0 - 0xff0
             core::mem::transmute::<[u8; _REG_SIZE], RegisterBlock>([0; _REG_SIZE]);
         }
+    }
+}
+
+pub struct DMAC1 {}
+
+#[allow(non_snake_case)]
+pub struct DmacRegs {
+    CS: u32,        // 0x00, Status
+    CONBLK_AD: u32, // 0x04, Control block address
+    TI: u32,        // 0x08, CB word 0
+    SOURCE_AD: u32, // 0x0c, CB word 1
+    DEST_AD: u32,   // 0x10, CB word 2
+    TXFR_LEN: u32,  // 0x14, CB word 3
+    STRIDE: u32,    // 0x18, CB word 4
+    NEXTCONBK: u32, // 0x1c, CB word 5
+    DEBUG: u32,     // 0x20, debug
+}
+
+impl DMAC1 {
+    pub fn write_data() {
+        const DMAC_ADDR: u32 = 0x3F00_7200;
+        unsafe {
+            let mut register: *mut DmacRegs = DMAC_ADDR as *mut DmacRegs;
+            (*register).CS = 1;
+            (*register).CONBLK_AD = 2;
+            (*register).TI = 3;
+            // ...
+        }
+    }
+}
+
+pub struct DMAC2 {
+    base_addr: u32,
+}
+
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct RegisterDMAC2 {
+    Channels: [DmacRegister2; 15], // ch 0 - 15
+    __reserved: [u32; 0x38],       //
+    INT_STATUS: u32,               // 0xfe0
+    __reserved1: [u32; 0x3],       //
+    ENABLE: u32,                   // 0xff0
+}
+
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct DmacRegister2 {
+    CS: u32,                 // 0x00, Status
+    CONBLK_AD: u32,          // 0x04, Control block address
+    TI: u32,                 // 0x08, CB word 0
+    SOURCE_AD: u32,          // 0x0c, CB word 1
+    DEST_AD: u32,            // 0x10, CB word 2
+    TXFR_LEN: u32,           // 0x14, CB word 3
+    STRIDE: u32,             // 0x18, CB word 4
+    NEXTCONBK: u32,          // 0x1c, CB word 5
+    DEBUG: u32,              // 0x20, debug
+    __reserved: [u32; 0x37], // padding~ 0x100
+}
+
+impl core::ops::Deref for DMAC2 {
+    type Target = RegisterDMAC2;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.ptr() }
+    }
+}
+
+impl core::ops::DerefMut for DMAC2 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.ptr() }
+    }
+}
+
+impl DMAC2 {
+    fn ptr(&self) -> *mut RegisterDMAC2 {
+        self.base_addr as *mut _
+    }
+
+    pub fn new() -> DMAC2 {
+        DMAC2 {
+            base_addr: 0x3F00_7200,
+        }
+    }
+
+    pub fn write_data(&mut self) {
+        self.Channels[0].CS = 0;
+        // ...
     }
 }
