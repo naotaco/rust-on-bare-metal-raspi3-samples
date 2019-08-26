@@ -37,8 +37,11 @@ mod dmac;
 //mod uart;
 
 fn kernel_entry() -> ! {
+    // sample 0
+    dmac::DMAC0::write_data();
+
     // sample1
-    // dmac::DMAC1::write_data();
+    dmac::DMAC1::write_data();
 
     let mut dmac = dmac::DMAC2::new();
     dmac.write_data();

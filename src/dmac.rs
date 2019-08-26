@@ -382,29 +382,33 @@ impl DMAC {
     }
 }
 
+pub struct DMAC0 {}
+impl DMAC0 {
+    pub fn write_data() {
+        unsafe {
+            (*(0x3F00_7200 as *mut u32)) = 1; // CS
+            (*(0x3F00_7204 as *mut u32)) = 1; // CONBLK_AD
+                                              // ...
+        }
+    }
+}
+
 pub struct DMAC1 {}
 
 #[allow(non_snake_case)]
 pub struct DmacRegs {
-    CS: u32,        // 0x00, Status
+    CS: u32, // 0x00, Status
     CONBLK_AD: u32, // 0x04, Control block address
-    TI: u32,        // 0x08, CB word 0
-    SOURCE_AD: u32, // 0x0c, CB word 1
-    DEST_AD: u32,   // 0x10, CB word 2
-    TXFR_LEN: u32,  // 0x14, CB word 3
-    STRIDE: u32,    // 0x18, CB word 4
-    NEXTCONBK: u32, // 0x1c, CB word 5
-    DEBUG: u32,     // 0x20, debug
+             // ...
 }
 
 impl DMAC1 {
     pub fn write_data() {
-        const DMAC_ADDR: u32 = 0x3F00_7200;
+        const BASE: u32 = 0x3F00_7200;
+        let mut register: *mut DmacRegs = BASE as *mut DmacRegs;
         unsafe {
-            let mut register: *mut DmacRegs = DMAC_ADDR as *mut DmacRegs;
             (*register).CS = 1;
             (*register).CONBLK_AD = 2;
-            (*register).TI = 3;
             // ...
         }
     }
@@ -417,31 +421,11 @@ pub struct DMAC2 {
 #[allow(non_snake_case)]
 #[repr(C)]
 pub struct RegisterDMAC2 {
-    Channels: [DmacRegister2; 15], // ch 0 - 15
-    __reserved: [u32; 0x38],       //
-    INT_STATUS: u32,               // 0xfe0
-    __reserved1: [u32; 0x3],       //
-    ENABLE: u32,                   // 0xff0
-}
-
-#[allow(non_snake_case)]
-#[repr(C)]
-pub struct DmacRegister2 {
-    CS: u32,                 // 0x00, Status
-    CONBLK_AD: u32,          // 0x04, Control block address
-    TI: u32,                 // 0x08, CB word 0
-    SOURCE_AD: u32,          // 0x0c, CB word 1
-    DEST_AD: u32,            // 0x10, CB word 2
-    TXFR_LEN: u32,           // 0x14, CB word 3
-    STRIDE: u32,             // 0x18, CB word 4
-    NEXTCONBK: u32,          // 0x1c, CB word 5
-    DEBUG: u32,              // 0x20, debug
-    __reserved: [u32; 0x37], // padding~ 0x100
+    SOME_DATA: u32,
 }
 
 impl core::ops::Deref for DMAC2 {
     type Target = RegisterDMAC2;
-
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.ptr() }
     }
@@ -459,13 +443,12 @@ impl DMAC2 {
     }
 
     pub fn new() -> DMAC2 {
-        DMAC2 {
-            base_addr: 0x3F00_7200,
-        }
+        let b: u32 = 0x3F00_7200;
+        DMAC2 { base_addr: b }
     }
 
     pub fn write_data(&mut self) {
-        self.Channels[0].CS = 0;
+        self.SOME_DATA = 0x10;
         // ...
     }
 }
