@@ -76,3 +76,6 @@ gdb: clean $(SOURCES)
 
 gdb-opt0: clean $(SOURCES)
 	$(call gen_gdb,-C debuginfo=2 -C opt-level=0)
+
+expand:
+	cargo expand
