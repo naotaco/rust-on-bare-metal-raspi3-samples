@@ -452,3 +452,15 @@ impl DMAC2 {
         // ...
     }
 }
+
+pub struct DMAC3 {
+    pub TI: ReadWrite<u32, TI::Register>,
+}
+
+impl DMAC3 {
+    pub fn new() -> DMAC3 {
+        let d = DMAC3 { TI: true };
+        d.TI.write(TI::SRC_INC::Enabled);
+        d
+    }
+}
