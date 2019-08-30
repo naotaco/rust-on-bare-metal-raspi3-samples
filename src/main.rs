@@ -29,22 +29,42 @@
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
-//mod arm_debug;
+mod arm_debug;
 mod dmac;
-// mod gpio;
+mod gpio;
 // mod interrupt;
-// mod mbox;
-//mod uart;
+mod mbox;
+mod uart;
 
 fn kernel_entry() -> ! {
+    arm_debug::setup_debug();
+    let uart = uart::Uart::new();
+    let mut mbox = mbox::Mbox::new();
+    // set up serial console
+    match uart.init(&mut mbox) {
+        Ok(_) => uart.puts("\n[0] UART is live!\n"),
+        Err(_) => loop {
+            unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
+        },
+    }
     // sample 0
-    dmac::DMAC0::write_data();
+    // dmac::DMAC0::write_data();
+
+    uart.puts("Hello");
+
+    // sample 0
+    // dmac::DMAC0::write_data();
 
     // sample1
-    dmac::DMAC1::write_data();
+    // dmac::DMAC1::write_data();
 
-    let mut dmac = dmac::DMAC2::new();
-    dmac.write_data();
+    // let mut dmac = dmac::DMAC2::new();
+    // dmac.write_data();
+
+    let d = dmac::DMAC3::new(0);
+    let value = d.get();
+    uart.hex(value);
+    uart.hex(d.is_dest_inc() as u32);
 
     loop {}
 }

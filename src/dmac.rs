@@ -1,8 +1,8 @@
 use super::MMIO_BASE;
 use core::ops::{Deref, DerefMut};
-use register::{
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
+use tock_registers::{
     register_bitfields,
+    registers::{LocalRegisterCopy, ReadOnly, ReadWrite, WriteOnly},
 };
 
 pub struct DMAC {
@@ -454,13 +454,28 @@ impl DMAC2 {
 }
 
 pub struct DMAC3 {
+    // pub TI: LocalRegisterCopy<u32, TI::Register>,
     pub TI: ReadWrite<u32, TI::Register>,
 }
 
 impl DMAC3 {
-    pub fn new() -> DMAC3 {
-        let d = DMAC3 { TI: true };
-        d.TI.write(TI::SRC_INC::Enabled);
+    pub fn new(init_value:u32) -> DMAC3 {
+        // let reg = tock_registers::registers::LocalRegisterCopy::new(init_value);
+        let mask :u32 = 0;
+        let reg = tock_registers::registers::Field::new(mask, 0);
+        let d = DMAC3 { TI: reg };
         d
+    }
+
+    pub fn get(&self) -> u32{
+        self.TI.get()
+    }
+
+    pub fn test(&self){
+        //let ti = tock_registers::registers::Field::new(mask: u32, shift: usize)
+    }
+
+    pub fn is_dest_inc(&self)-> bool{
+        self.TI.is_set(TI::DEST_INC)
     }
 }

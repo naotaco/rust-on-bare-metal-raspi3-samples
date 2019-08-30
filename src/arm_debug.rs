@@ -25,7 +25,7 @@
 use super::MMIO_BASE;
 
 // use core::ops;
-use register::{mmio::ReadWrite, register_bitfields};
+use tock_registers::{registers::ReadWrite, register_bitfields};
 
 register_bitfields! {
     u32,
