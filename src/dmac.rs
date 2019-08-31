@@ -462,9 +462,11 @@ impl DMAC3 {
     pub fn new(init_value:u32) -> DMAC3 {
         // let reg = tock_registers::registers::LocalRegisterCopy::new(init_value);
         let mask :u32 = 0;
-        let reg = tock_registers::registers::Field::new(mask, 0);
+
+        let reg = ReadWrite::<u32, TI::Register>::new(0);
         let d = DMAC3 { TI: reg };
         d
+       
     }
 
     pub fn get(&self) -> u32{
@@ -473,6 +475,7 @@ impl DMAC3 {
 
     pub fn test(&self){
         //let ti = tock_registers::registers::Field::new(mask: u32, shift: usize)
+        self.TI.write(TI::DEST_INC::Enabled);
     }
 
     pub fn is_dest_inc(&self)-> bool{
