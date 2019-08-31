@@ -50,21 +50,21 @@ fn kernel_entry() -> ! {
     // sample 0
     // dmac::DMAC0::write_data();
 
-    uart.puts("Hello");
-
-    // sample 0
-    // dmac::DMAC0::write_data();
-
     // sample1
     // dmac::DMAC1::write_data();
 
     // let mut dmac = dmac::DMAC2::new();
     // dmac.write_data();
 
-    let d = dmac::DMAC3::new(0);
-    let value = d.get();
+    let d = dmac::DMAC3::new();
+    let src = 0x200_0000;
+    let dest = 0x300_0000;
+    let size = 64;
+    let cb = dmac::ControlBlock3::new(src, dest, size);
+
+    let value = cb.get_ti();    
     uart.hex(value);
-    uart.hex(d.is_dest_inc() as u32);
+
 
     loop {}
 }
