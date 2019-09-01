@@ -474,8 +474,16 @@ pub struct RegisterBlock3 {
 #[allow(non_snake_case)]
 #[repr(C)]
 pub struct DmaChannelRegister3 {
-    CS: ReadWrite<u32, CS::Register>,
-    // ...
+    CS: ReadWrite<u32, CS::Register>,             // 0x00, Status
+    CONBLK_AD: ReadWrite<u32>,                    // 0x04, Control block address
+    TI: ReadWrite<u32, TI::Register>,             // 0x08, CB word 0
+    SOURCE_AD: u32,                               // 0x0c, CB word 1
+    DEST_AD: u32,                                 // 0x10, CB word 2
+    TXFR_LEN: ReadWrite<u32, TXFR_LEN::Register>, // 0x14, CB word 3
+    STRIDE: ReadWrite<u32, STRIDE::Register>,     // 0x18, CB word 4
+    NEXTCONBK: u32,                               // 0x1c, CB word 5
+    DEBUG: ReadWrite<u32, DEBUG::Register>,       // 0x20, debug
+    __reserved: [u32; 0x37],                      // padding~ 0x100
 }
 
 impl core::ops::Deref for DMAC3 {
@@ -499,7 +507,7 @@ impl DMAC3 {
     }
 
     pub fn turn_on(&self) {
-        self.ENABLE.write(GLOBAL_ENABLE::ENABLE0::Enable);
+        self.ENABLE.modify(GLOBAL_ENABLE::ENABLE0::Enable);
     }
 }
 
@@ -531,13 +539,34 @@ impl ControlBlock4 {
         cb.TI.modify(TI::DEST_INC::Enabled + TI::SRC_INC::Enabled);
         cb
     }
+}
 
-    pub fn test(&self) {
-        //let ti = tock_registers::registers::Field::new(mask: u32, shift: usize)
-        self.TI.write(TI::DEST_INC::Enabled);
+impl core::ops::Deref for DMAC4 {
+    type Target = RegisterBlock;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*Self::ptr() }
+    }
+}
+
+pub struct DMAC4{}
+
+impl DMAC4 {
+    pub fn new() -> DMAC4 {
+        DMAC4 {}
+    }
+    
+    fn ptr() -> *const RegisterBlock {
+        DMAC_BASE as *const _
     }
 
-    pub fn get_ti(&self) -> u32 {
-        self.TI.get()
+    pub fn turn_on_ch0(&self) {
+        self.ENABLE.write(GLOBAL_ENABLE::ENABLE0::Enable);
+    }
+
+    pub fn exec(&self, cs: &ControlBlock4) {
+        let raw_addr: *const ControlBlock4 = cs;
+        self.Channels[0].CONBLK_AD.set(raw_addr as u32);
+        self.Channels[0].CS.write(CS::ACTIVE::Enable);
     }
 }

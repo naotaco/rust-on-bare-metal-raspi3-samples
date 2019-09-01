@@ -81,29 +81,12 @@ fn kernel_entry() -> ! {
     let src = 0x200_0000;
     let dest = 0x300_0000;
     let size = 64;
-    init(src, size);
-    uart.puts("src\n");
-    dump(src, size, &uart);
-    uart.puts("\ndest\n");
-    dump(dest, size, &uart);
-    uart.puts("kick DMA\n");
+
     let cb = dmac::ControlBlock4::new(src, dest, size as u32);
-
-    let value = cb.get_ti();
-    uart.puts("TI\n");
-    uart.hex(value);
-
-    let d3 = dmac::DMAC3::new();
-    d3.turn_on();
-
-    let dmac = dmac::DMAC::new();
-    dmac.turn_on();
-    dmac.exec4(&cb);
-
-    for i in 0..30 {
-        uart.puts("dump\n");
-        dump(dest, size, &uart);
-    }
+ 
+    let d4 = dmac::DMAC4::new();
+    d4.turn_on_ch0();
+    d4.exec(&cb);    
 
     loop {}
 }
