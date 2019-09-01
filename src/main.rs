@@ -87,7 +87,7 @@ fn kernel_entry() -> ! {
     uart.puts("\ndest\n");
     dump(dest, size, &uart);
     uart.puts("kick DMA\n");
-    let cb = dmac::ControlBlock3::new(src, dest, size as u32);
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32);
 
     let value = cb.get_ti();
     uart.puts("TI\n");
@@ -95,7 +95,7 @@ fn kernel_entry() -> ! {
 
     let dmac = dmac::DMAC::new();
     dmac.turn_on();
-    dmac.exec3(&cb);
+    dmac.exec4(&cb);
 
     for i in 0..30 {
         uart.puts("dump\n");

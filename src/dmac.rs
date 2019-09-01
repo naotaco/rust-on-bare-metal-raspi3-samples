@@ -370,8 +370,8 @@ impl DMAC {
         self.Channels[0].CS.write(CS::ACTIVE::Enable);
     }
 
-    pub fn exec3(&self, cs: &ControlBlock3) {
-        let raw_addr: *const ControlBlock3 = cs;
+    pub fn exec4(&self, cs: &ControlBlock4) {
+        let raw_addr: *const ControlBlock4 = cs;
         self.Channels[0].CONBLK_AD.set(raw_addr as u32);
         self.Channels[0].CS.write(CS::ACTIVE::Enable);
     }
@@ -461,11 +461,21 @@ impl DMAC2 {
 
 // -----
 
+
+pub struct DMAC3 {}
+
+impl DMAC3 {
+    pub fn new() -> DMAC3 {
+        DMAC3 {}
+    }
+}
+
+
 /// Data structure used to order DMA settings/options.
 /// Write data on DDR accordingly and tell it's address to DMA.
 /// Values ordered by these members can be observed on register as comment follows.
 #[repr(C, align(32))]
-pub struct ControlBlock3 {
+pub struct ControlBlock4 {
     pub TI: ReadWrite<u32, TI::Register>, // 0x00, accociated to TI register.
     pub source_address: u32,              // 0x04, SOURCE_AD
     pub destination_address: u32,         // 0x08, DEST_AD
@@ -475,9 +485,9 @@ pub struct ControlBlock3 {
     __reserved: [u32; 2],                 // N/A
 }
 
-impl ControlBlock3 {
-    pub fn new(src: u32, dest: u32, length: u32) -> ControlBlock3 {
-        let cb = ControlBlock3 {
+impl ControlBlock4 {
+    pub fn new(src: u32, dest: u32, length: u32) -> ControlBlock4 {
+        let cb = ControlBlock4 {
             TI: ReadWrite::<u32, TI::Register>::new(0),
             source_address: src,
             destination_address: dest,
@@ -497,13 +507,5 @@ impl ControlBlock3 {
 
     pub fn get_ti(&self) -> u32 {
         self.TI.get()
-    }
-}
-
-pub struct DMAC3 {}
-
-impl DMAC3 {
-    pub fn new() -> DMAC3 {
-        DMAC3 {}
     }
 }
