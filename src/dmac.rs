@@ -370,6 +370,12 @@ impl DMAC {
         self.Channels[0].CS.write(CS::ACTIVE::Enable);
     }
 
+    pub fn exec3(&self, cs: &ControlBlock3) {
+        let raw_addr: *const ControlBlock3 = cs;
+        self.Channels[0].CONBLK_AD.set(raw_addr as u32);
+        self.Channels[0].CS.write(CS::ACTIVE::Enable);
+    }
+
     fn __assert_size(&self) {
         unsafe {
             // compile time size assertion
@@ -460,17 +466,17 @@ impl DMAC2 {
 /// Values ordered by these members can be observed on register as comment follows.
 #[repr(C, align(32))]
 pub struct ControlBlock3 {
-    pub TI: ReadWrite<u32, TI::Register>,       // 0x00, accociated to TI register.
-    pub source_address: u32,             // 0x04, SOURCE_AD
-    pub destination_address: u32,        // 0x08, DEST_AD
-    pub transfer_length: u32,            // 0x0C, TXFR_LEN
-    pub two_d_mode_stride: u32,          // 0x10, STRIDE
-    pub next_control_block_address: u32, // 0x14, NEXTCONBK
-    __reserved: [u32; 2],                // N/A
+    pub TI: ReadWrite<u32, TI::Register>, // 0x00, accociated to TI register.
+    pub source_address: u32,              // 0x04, SOURCE_AD
+    pub destination_address: u32,         // 0x08, DEST_AD
+    pub transfer_length: u32,             // 0x0C, TXFR_LEN
+    pub two_d_mode_stride: u32,           // 0x10, STRIDE
+    pub next_control_block_address: u32,  // 0x14, NEXTCONBK
+    __reserved: [u32; 2],                 // N/A
 }
 
 impl ControlBlock3 {
-    pub fn new(src: u32, dest:u32, length:u32) -> ControlBlock3{
+    pub fn new(src: u32, dest: u32, length: u32) -> ControlBlock3 {
         let cb = ControlBlock3 {
             TI: ReadWrite::<u32, TI::Register>::new(0),
             source_address: src,
@@ -484,23 +490,20 @@ impl ControlBlock3 {
         cb
     }
 
-    pub fn test(&self){
+    pub fn test(&self) {
         //let ti = tock_registers::registers::Field::new(mask: u32, shift: usize)
         self.TI.write(TI::DEST_INC::Enabled);
     }
 
-    pub fn get_ti(&self) -> u32{
+    pub fn get_ti(&self) -> u32 {
         self.TI.get()
     }
 }
 
-pub struct DMAC3 {
-
-}
+pub struct DMAC3 {}
 
 impl DMAC3 {
     pub fn new() -> DMAC3 {
-        DMAC3{}
+        DMAC3 {}
     }
-
 }
