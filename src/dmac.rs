@@ -461,6 +461,30 @@ impl DMAC2 {
 
 // -----
 
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct RegisterBlock3 {
+    Channels: [DmaChannelRegister3; 15], // ch 0 - 15
+    __reserved: [u32; 0x38],
+    INT_STATUS: ReadWrite<u32, GLOBAL_INT::Register>, // 0xfe0
+    __reserved1: [u32; 0x3],
+    ENABLE: ReadWrite<u32, GLOBAL_ENABLE::Register>, // 0xff0
+}
+
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct DmaChannelRegister3 {
+    CS: ReadWrite<u32, CS::Register>,
+    // ...
+}
+
+impl core::ops::Deref for DMAC3 {
+    type Target = RegisterBlock3;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*Self::ptr() }
+    }
+}
 
 pub struct DMAC3 {}
 
@@ -468,8 +492,16 @@ impl DMAC3 {
     pub fn new() -> DMAC3 {
         DMAC3 {}
     }
-}
 
+    fn ptr() -> *const RegisterBlock3 {
+        const DMAC_BASE: u32 = 0x3F00_7200;
+        DMAC_BASE as *const _
+    }
+
+    pub fn turn_on(&self) {
+        self.ENABLE.write(GLOBAL_ENABLE::ENABLE0::Enable);
+    }
+}
 
 /// Data structure used to order DMA settings/options.
 /// Write data on DDR accordingly and tell it's address to DMA.

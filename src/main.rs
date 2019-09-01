@@ -93,6 +93,9 @@ fn kernel_entry() -> ! {
     uart.puts("TI\n");
     uart.hex(value);
 
+    let d3 = dmac::DMAC3::new();
+    d3.turn_on();
+
     let dmac = dmac::DMAC::new();
     dmac.turn_on();
     dmac.exec4(&cb);
