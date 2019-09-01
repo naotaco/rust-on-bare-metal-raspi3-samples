@@ -25,8 +25,8 @@
 use super::MMIO_BASE;
 use core::ops;
 use tock_registers::{
-    registers::{ReadOnly, WriteOnly},
     register_bitfields,
+    registers::{ReadOnly, WriteOnly},
 };
 
 register_bitfields! {

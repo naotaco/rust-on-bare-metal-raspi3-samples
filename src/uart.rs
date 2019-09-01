@@ -29,7 +29,10 @@ use core::{
     ops,
     sync::atomic::{compiler_fence, Ordering},
 };
-use tock_registers::{register_bitfields, registers::{ReadWrite, ReadOnly, WriteOnly}};
+use tock_registers::{
+    register_bitfields,
+    registers::{ReadOnly, ReadWrite, WriteOnly},
+};
 
 // PL011 UART registers.
 //
