@@ -134,7 +134,13 @@ register_bitfields! {
             SLIMBUS_DC9 = 31
         ],
         /// number of bursts that DMA will try. 0 for single transfer.
-        BURST_LENGTH OFFSET(12) NUMBITS(4) [],
+        BURST_LENGTH OFFSET(12) NUMBITS(4) [
+            Single = 0,
+            Burst2 = 2,
+            Burst4 = 4,
+            Burst8 = 8,
+            Burst16 = 16
+        ],
         SRC_IGNORE OFFSET(11) NUMBITS(1) [
             DontReadSource = 1, // data will be zero: for zero-fill operations.
             Standard = 0
@@ -526,7 +532,7 @@ pub struct ControlBlock4 {
 }
 
 impl ControlBlock4 {
-    pub fn new(src: u32, dest: u32, length: u32) -> ControlBlock4 {
+    pub fn new(src: u32, dest: u32, length: u32, burst: u8) -> ControlBlock4 {
         let cb = ControlBlock4 {
             TI: ReadWrite::<u32, TI::Register>::new(0),
             source_address: src,
@@ -536,6 +542,39 @@ impl ControlBlock4 {
             next_control_block_address: 0,
             __reserved: [0; 2],
         };
+
+        let burst = match burst {
+            2 => {
+                cb.TI.modify(
+                    TI::BURST_LENGTH::Burst2
+                        + TI::SRC_WIDTH::Use128Bits
+                        + TI::DEST_WIDTH::Use128Bits,
+                );
+            }
+            4 => {
+                cb.TI.modify(
+                    TI::BURST_LENGTH::Burst4
+                        + TI::SRC_WIDTH::Use128Bits
+                        + TI::DEST_WIDTH::Use128Bits,
+                );
+            }
+            8 => {
+                cb.TI.modify(
+                    TI::BURST_LENGTH::Burst8
+                        + TI::SRC_WIDTH::Use128Bits
+                        + TI::DEST_WIDTH::Use128Bits,
+                );
+            }
+            16 => {
+                cb.TI.modify(
+                    TI::BURST_LENGTH::Burst16
+                        + TI::SRC_WIDTH::Use128Bits
+                        + TI::DEST_WIDTH::Use128Bits,
+                );
+            }
+            _ => cb.TI.modify(TI::BURST_LENGTH::Single),
+        };
+
         cb.TI.modify(TI::DEST_INC::Enabled + TI::SRC_INC::Enabled);
         cb
     }

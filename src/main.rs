@@ -64,13 +64,13 @@ fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
     } else {
         dump(data_addr, 64, &uart);
         uart.puts(".......\n");
-        dump((data_addr + size as u32 - 64), 64, &uart);
+        dump(data_addr + size as u32 - 64, 64, &uart);
         uart.puts("\n");
     }
 }
 
-fn memcpy_dmac(src: u32, dest: u32, size: usize) {
-    let cb = dmac::ControlBlock4::new(src, dest, size as u32);
+fn memcpy_dmac(src: u32, dest: u32, size: usize, burst: u8) {
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32, burst);
     let d4 = dmac::DMAC4::new();
     d4.init();
     d4.turn_on_ch0();
@@ -102,6 +102,34 @@ fn print_time(uart: &uart::Uart) {
     uart.puts("\n");
 }
 
+fn run_trans_test(
+    gpio: &gpio::GPIO,
+    uart: &uart::Uart,
+    src: u32,
+    dest: u32,
+    size: usize,
+    burst: u8,
+) {
+    let timer = timer::TIMER::new();
+    let start = timer.get_counter64();
+    gpio.pin5(true);
+    //print_time(&uart);
+    //uart.puts("starting memcpy.\n");
+
+    memcpy_dmac(src, dest, size, burst);
+    // memcpy_cpu(src, dest, size);
+
+    gpio.pin5(false);
+    let end = timer.get_counter64();
+    uart.puts("done! size: 0x");
+    uart.hex(size as u32);
+    uart.puts(" burst: ");
+    uart.hex(burst as u32);
+    uart.puts(" duration: 0x");
+    uart.hex(((end - start) & 0xFFFF_FFFF) as u32);
+    uart.puts("\n");
+}
+
 fn kernel_entry() -> ! {
     arm_debug::setup_debug();
 
@@ -123,7 +151,7 @@ fn kernel_entry() -> ! {
     // dmac::DMAC1::write_data();
     let src = 0x200_0000;
     let dest = 0x400_0000;
-    let size = 0x1_0000;
+    let size = 0x100_0000;
 
     gpio.pin5(true);
     print_time(&uart);
@@ -139,16 +167,11 @@ fn kernel_entry() -> ! {
     dump(src, size, &uart);
     dump(dest, size, &uart);
 
-    gpio.pin5(true);
-    print_time(&uart);
-    uart.puts("starting memcpy.\n");
-
-    memcpy_dmac(src, dest, size);
-    // memcpy_cpu(src, dest, size);
-
-    gpio.pin5(false);
-    print_time(&uart);
-    uart.puts("Done!\n");
+    run_trans_test(&gpio, &uart, src, dest, size, 0);
+    run_trans_test(&gpio, &uart, src, dest, size, 2);
+    run_trans_test(&gpio, &uart, src, dest, size, 4);
+    run_trans_test(&gpio, &uart, src, dest, size, 8);
+    run_trans_test(&gpio, &uart, src, dest, size, 16);
 
     dump(dest, size, &uart);
 
