@@ -230,7 +230,7 @@ impl Uart {
     }
 
     /// Receive a character
-    pub fn getc(&self) -> char {
+    pub fn _getc(&self) -> char {
         // wait until something is in the buffer
         loop {
             if !self.FR.is_set(FR::RXFE) {

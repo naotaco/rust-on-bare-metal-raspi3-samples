@@ -26,105 +26,42 @@
 #![no_std]
 #![no_main]
 #![feature(asm)]
-#![feature(alloc)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
 mod arm_debug;
+mod dmac;
 mod gpio;
+mod interrupt;
 mod mbox;
 mod uart;
 
-extern crate alloc;
-extern crate nt_allocator;
-
-use alloc::vec::Vec;
-use nt_allocator::NtGlobalAlloc;
-
-#[global_allocator]
-static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
-    base: 0x0100_0000,
-    size: 0x0400_0000,
-};
-
-fn alloc_test_u32(uart: &uart::Uart) {
-    let max: u32 = 32;
-    let mut v: Vec<u32> = Vec::new();
-    let mut last_pointer = 0 as *const u32;
-
-    for i in 0..max {
-        let value = i as u32;
-
-        v.push(value);
-
-        if last_pointer != &v[0] {
-            uart.puts("(Re)alloc detected!\nstart addr: ");
-            let start: *const u32 = &v[0];
-            uart.hex(start as u32);
-            uart.puts("\n");
-            uart.puts("len     : 0x");
-            uart.hex(v.len() as u32);
-            uart.puts("\ncapacity: 0x");
-            uart.hex(v.capacity() as u32);
-            uart.puts("\n");
-            last_pointer = &v[0];
+fn init(data_addr: u32, size: usize) {
+    for i in 0..size / 4 {
+        let p: *mut u32 = (data_addr + (i * 4) as u32) as *mut u32;
+        unsafe {
+            *p = 0xFF00_0000 + i as u32;
         }
-    }
-
-    for i in 0..max {
-        uart.hex(i);
-        uart.puts(": ");
-        uart.hex(v[i as usize]);
-        uart.puts("\n")
     }
 }
 
-fn alloc_test_f64(uart: &uart::Uart) {
-    let max: u32 = 32;
-    let mut v: Vec<f64> = Vec::new();
-    let mut last_pointer = 0 as *const f64;
-
-    for i in 0..max {
-        let value = i as f64;
-
-        v.push(value);
-
-        if last_pointer != &v[0] {
-            uart.puts("(Re)alloc detected!\nstart addr: ");
-            let start: *const f64 = &v[0];
-            uart.hex(start as u32);
+fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
+    for i in 0..size / 4 {
+        let p: *mut u32 = (data_addr + (i * 4) as u32) as *mut u32;
+        unsafe {
+            uart.hex(*p);
+        }
+        if i % 4 == 3 {
             uart.puts("\n");
-            uart.puts("len     : 0x");
-            uart.hex(v.len() as u32);
-            uart.puts("\ncapacity: 0x");
-            uart.hex(v.capacity() as u32);
-            uart.puts("\n");
-            last_pointer = &v[0];
         }
     }
-
-    for i in 0..max {
-        uart.hex(i);
-        uart.puts(": ");
-        uart.hex(v[i as usize] as u32);
-        uart.puts("\n")
-    }
-}
-
-fn float_test(a: f64) -> f64 {
-    let b = a * (0x23 as f64);
-    b
 }
 
 fn kernel_entry() -> ! {
-    let mut mbox = mbox::Mbox::new();
-    let uart = uart::Uart::new();
     arm_debug::setup_debug();
 
-    unsafe {
-        GLOBAL_ALLOCATOR.init();
-    }
-
+    let uart = uart::Uart::new();
+    let mut mbox = mbox::Mbox::new();
     // set up serial console
     match uart.init(&mut mbox) {
         Ok(_) => uart.puts("\n[0] UART is live!\n"),
@@ -132,13 +69,20 @@ fn kernel_entry() -> ! {
             unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
         },
     }
+    // sample 0
+    // dmac::DMAC0::write_data();
 
-    uart.puts("Greetings fellow Rustacean!\n");
+    // sample1
+    dmac::DMAC1::write_data();
 
-    alloc_test_u32(&uart);
-    // alloc_test_f64(&uart);
+    let src = 0x200_0000;
+    let dest = 0x300_0000;
+    let size = 64;
 
-    uart.hex((float_test(0.1) * 100.1) as u32);
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32);
+    let d4 = dmac::DMAC4::new();
+    d4.turn_on_ch0();
+    d4.exec(&cb);
 
     loop {}
 }
