@@ -62,7 +62,7 @@ pub unsafe fn enable() {
 
 // https://gist.github.com/heechul/3018642
 
-pub unsafe fn test() {
+pub unsafe fn test(){
     asm!("ldxr x0, [x1]"); // load exclusive
 }
 

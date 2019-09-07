@@ -32,7 +32,7 @@ const MMIO_BASE: u32 = 0x3F00_0000;
 mod arm_debug;
 mod dmac;
 mod gpio;
-// mod interrupt;
+mod interrupt;
 mod mbox;
 mod uart;
 
@@ -73,20 +73,16 @@ fn kernel_entry() -> ! {
     // dmac::DMAC0::write_data();
 
     // sample1
-    // dmac::DMAC1::write_data();
-
-    // let mut dmac = dmac::DMAC2::new();
-    // dmac.write_data();
+    dmac::DMAC1::write_data();
 
     let src = 0x200_0000;
     let dest = 0x300_0000;
     let size = 64;
 
     let cb = dmac::ControlBlock4::new(src, dest, size as u32);
- 
     let d4 = dmac::DMAC4::new();
     d4.turn_on_ch0();
-    d4.exec(&cb);    
+    d4.exec(&cb);
 
     loop {}
 }

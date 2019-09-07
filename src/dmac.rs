@@ -1,8 +1,8 @@
 use super::MMIO_BASE;
 use core::ops::{Deref, DerefMut};
-use tock_registers::{
+use register::{
+    mmio::{ReadOnly, ReadWrite, WriteOnly},
     register_bitfields,
-    registers::{LocalRegisterCopy, ReadOnly, ReadWrite, WriteOnly},
 };
 
 pub struct DMAC {
@@ -549,13 +549,12 @@ impl core::ops::Deref for DMAC4 {
     }
 }
 
-pub struct DMAC4{}
+pub struct DMAC4 {}
 
 impl DMAC4 {
     pub fn new() -> DMAC4 {
         DMAC4 {}
     }
-    
     fn ptr() -> *const RegisterBlock {
         DMAC_BASE as *const _
     }
