@@ -107,6 +107,8 @@ fn kernel_entry() -> ! {
 
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();
+    let gpio = gpio::GPIO::new();
+
     // set up serial console
     match uart.init(&mut mbox) {
         Ok(_) => uart.puts("\n[0] UART is live!\n"),
@@ -119,25 +121,35 @@ fn kernel_entry() -> ! {
 
     // sample1
     // dmac::DMAC1::write_data();
-
     let src = 0x200_0000;
     let dest = 0x400_0000;
     let size = 0x1_0000;
+
+    gpio.pin5(true);
     print_time(&uart);
     uart.puts("Initializing...\n");
+
     init(src, size, 0xFF00_0000);
     init(dest, size, 0x1200_0000);
 
+    gpio.pin5(false);
     print_time(&uart);
     uart.puts("Initializing.......done! \n");
 
     dump(src, size, &uart);
     dump(dest, size, &uart);
 
-    // memcpy_dmac(src, dest, size);
-    memcpy_cpu(src, dest, size);
+    gpio.pin5(true);
+    print_time(&uart);
+    uart.puts("starting memcpy.\n");
+
+    memcpy_dmac(src, dest, size);
+    // memcpy_cpu(src, dest, size);
+
+    gpio.pin5(false);
     print_time(&uart);
     uart.puts("Done!\n");
+
     dump(dest, size, &uart);
 
     loop {}

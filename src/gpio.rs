@@ -23,13 +23,22 @@
  */
 
 use super::MMIO_BASE;
-use register::{mmio::ReadWrite, register_bitfields};
+use register::{mmio::ReadWrite, mmio::WriteOnly, register_bitfields};
 
 // Descriptions taken from
 // https://github.com/raspberrypi/documentation/files/1888662/BCM2837-ARM-Peripherals.-.Revised.-.V2-1.pdf
 register_bitfields! {
     u32,
-
+    GPFSEL0[
+        FSEL5 OFFSET(15) NUMBITS(3)[
+            Input = 0b000,
+            Output = 0b001
+        ],
+        FSEL6 OFFSET(18) NUMBITS(3)[
+            Input = 0b000,
+            Output = 0b001
+        ]
+    ],
     /// GPIO Function Select 1
     GPFSEL1 [
         /// Pin 15
@@ -50,6 +59,24 @@ register_bitfields! {
         ]
     ],
 
+    GPSET0[
+        SET5 OFFSET(5) NUMBITS(1)[
+            Assert = 1 // write 1 to set.
+        ],
+        SET6 OFFSET(5) NUMBITS(1)[
+            Assert = 1
+        ]
+    ],
+
+    GPCLR0[
+        CLR5 OFFSET(5) NUMBITS(1)[
+            Negate = 1 // write 1 to clear.
+        ],
+        CLR6 OFFSET(5) NUMBITS(1)[
+            Negate = 1 // write 1 to clear
+        ]
+    ],
+
     /// GPIO Pull-up/down Clock Register 0
     GPPUDCLK0 [
         /// Pin 15
@@ -66,6 +93,21 @@ register_bitfields! {
     ]
 }
 
+const GPIO_BASE: u32 = super::MMIO_BASE + 0x20_0000;
+
+pub struct GPIO {}
+
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct RegisterBlock {
+    GPFSEL0: ReadWrite<u32, GPFSEL0::Register>, // 0
+    GPFSEL1: ReadWrite<u32, GPFSEL1::Register>, // 4
+    __reserved: [u32; 0x5],
+    GPSET0: WriteOnly<u32, GPSET0::Register>, // 1c
+    __reserved2: [u32; 0x2],
+    GPCLR0: WriteOnly<u32, GPCLR0::Register>, // 0x28
+}
+
 pub const GPFSEL1: *const ReadWrite<u32, GPFSEL1::Register> =
     (MMIO_BASE + 0x0020_0004) as *const ReadWrite<u32, GPFSEL1::Register>;
 
@@ -73,3 +115,37 @@ pub const GPPUD: *const ReadWrite<u32> = (MMIO_BASE + 0x0020_0094) as *const Rea
 
 pub const GPPUDCLK0: *const ReadWrite<u32, GPPUDCLK0::Register> =
     (MMIO_BASE + 0x0020_0098) as *const ReadWrite<u32, GPPUDCLK0::Register>;
+
+impl core::ops::Deref for GPIO {
+    type Target = RegisterBlock;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*Self::ptr() }
+    }
+}
+
+impl GPIO {
+    pub fn new() -> GPIO {
+        let g = GPIO {};
+        g.init();
+        g
+    }
+
+    fn ptr() -> *const RegisterBlock {
+        GPIO_BASE as *const _
+    }
+
+    fn init(&self) {
+        self.GPFSEL0
+            .modify(GPFSEL0::FSEL5::Output + GPFSEL0::FSEL6::Output);
+        self.GPCLR0.write(GPCLR0::CLR5::Negate);
+    }
+
+    pub fn pin5(&self, set: bool) {
+        if set {
+            self.GPSET0.write(GPSET0::SET5::Assert);
+        } else {
+            self.GPCLR0.write(GPCLR0::CLR5::Negate);
+        }
+    }
+}
