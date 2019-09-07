@@ -559,6 +559,27 @@ impl DMAC4 {
         DMAC_BASE as *const _
     }
 
+    pub fn init(&self) {
+        self.ENABLE.write(
+            GLOBAL_ENABLE::ENABLE0::Disable
+                + GLOBAL_ENABLE::ENABLE1::Disable
+                + GLOBAL_ENABLE::ENABLE2::Disable
+                + GLOBAL_ENABLE::ENABLE3::Disable
+                + GLOBAL_ENABLE::ENABLE4::Disable
+                + GLOBAL_ENABLE::ENABLE5::Disable
+                + GLOBAL_ENABLE::ENABLE6::Disable
+                + GLOBAL_ENABLE::ENABLE7::Disable
+                + GLOBAL_ENABLE::ENABLE8::Disable
+                + GLOBAL_ENABLE::ENABLE9::Disable
+                + GLOBAL_ENABLE::ENABLE10::Disable
+                + GLOBAL_ENABLE::ENABLE11::Disable
+                + GLOBAL_ENABLE::ENABLE12::Disable
+                + GLOBAL_ENABLE::ENABLE13::Disable
+                + GLOBAL_ENABLE::ENABLE14::Disable
+                + GLOBAL_ENABLE::ENABLE15::Disable,
+        );
+    }
+
     pub fn turn_on_ch0(&self) {
         self.ENABLE.write(GLOBAL_ENABLE::ENABLE0::Enable);
     }
@@ -567,5 +588,21 @@ impl DMAC4 {
         let raw_addr: *const ControlBlock4 = cs;
         self.Channels[0].CONBLK_AD.set(raw_addr as u32);
         self.Channels[0].CS.write(CS::ACTIVE::Enable);
+    }
+
+    pub fn wait_end(&self, ch: usize) {
+        if ch > 15 {
+            return;
+        }
+        while self.Channels[ch].CS.read(CS::END) == 0 {
+            // wait a while
+        }
+    }
+
+    pub fn clear(&self, ch: usize) {
+        if ch > 15 {
+            return;
+        }
+        self.Channels[0].CS.write(CS::END::Clear);
     }
 }
