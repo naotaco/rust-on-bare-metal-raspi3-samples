@@ -109,25 +109,31 @@ fn run_trans_test(
     dest: u32,
     size: usize,
     burst: u8,
+    use_dma: bool,
 ) {
-    let timer = timer::TIMER::new();
+    /*     let timer = timer::TIMER::new();
     let start = timer.get_counter64();
-    gpio.pin5(true);
+    gpio.pin5(true); */
     //print_time(&uart);
     //uart.puts("starting memcpy.\n");
 
-    memcpy_dmac(src, dest, size, burst);
+    if use_dma {
+        memcpy_dmac(src, dest, size, burst);
+    } else {
+        memcpy_cpu(src, dest, size);
+    }
     // memcpy_cpu(src, dest, size);
 
-    gpio.pin5(false);
+    /*     gpio.pin5(false);
     let end = timer.get_counter64();
+
     uart.puts("done! size: 0x");
     uart.hex(size as u32);
     uart.puts(" burst: ");
     uart.hex(burst as u32);
     uart.puts(" duration: 0x");
     uart.hex(((end - start) & 0xFFFF_FFFF) as u32);
-    uart.puts("\n");
+    uart.puts("\n"); */
 }
 
 fn kernel_entry() -> ! {
@@ -167,11 +173,12 @@ fn kernel_entry() -> ! {
     dump(src, size, &uart);
     dump(dest, size, &uart);
 
-    run_trans_test(&gpio, &uart, src, dest, size, 0);
-    run_trans_test(&gpio, &uart, src, dest, size, 2);
-    run_trans_test(&gpio, &uart, src, dest, size, 4);
-    run_trans_test(&gpio, &uart, src, dest, size, 8);
-    run_trans_test(&gpio, &uart, src, dest, size, 16);
+    run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
+    run_trans_test(&gpio, &uart, src, dest, size, 0, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 2, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 4, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 8, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 16, true);
 
     dump(dest, size, &uart);
 
