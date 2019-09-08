@@ -1,5 +1,6 @@
 use super::MMIO_BASE;
 use core::ops::{Deref, DerefMut};
+use core::sync::atomic::{compiler_fence, fence, Ordering::Release};
 use register::{
     mmio::{ReadOnly, ReadWrite, WriteOnly},
     register_bitfields,
@@ -619,14 +620,64 @@ impl DMAC4 {
         );
     }
 
-    pub fn turn_on_ch0(&self) {
-        self.ENABLE.write(GLOBAL_ENABLE::ENABLE0::Enable);
+    pub fn turn_on(&self, ch: usize) {
+        let en = match ch {
+            0 => GLOBAL_ENABLE::ENABLE0::Enable,
+            1 => GLOBAL_ENABLE::ENABLE1::Enable,
+            2 => GLOBAL_ENABLE::ENABLE2::Enable,
+            3 => GLOBAL_ENABLE::ENABLE3::Enable,
+            4 => GLOBAL_ENABLE::ENABLE4::Enable,
+            5 => GLOBAL_ENABLE::ENABLE5::Enable,
+            6 => GLOBAL_ENABLE::ENABLE6::Enable,
+            7 => GLOBAL_ENABLE::ENABLE7::Enable,
+            8 => GLOBAL_ENABLE::ENABLE8::Enable,
+            9 => GLOBAL_ENABLE::ENABLE9::Enable,
+            10 => GLOBAL_ENABLE::ENABLE10::Enable,
+            11 => GLOBAL_ENABLE::ENABLE11::Enable,
+            12 => GLOBAL_ENABLE::ENABLE12::Enable,
+            13 => GLOBAL_ENABLE::ENABLE13::Enable,
+            14 => GLOBAL_ENABLE::ENABLE14::Enable,
+            15 => GLOBAL_ENABLE::ENABLE15::Enable,
+            _ => {
+                return;
+            }
+        };
+        self.ENABLE.modify(en);
     }
 
-    pub fn exec(&self, cs: &ControlBlock4) {
+    pub fn turn_off(&self, ch: usize) {
+        let disable = match ch {
+            0 => GLOBAL_ENABLE::ENABLE0::Disable,
+            1 => GLOBAL_ENABLE::ENABLE1::Disable,
+            2 => GLOBAL_ENABLE::ENABLE2::Disable,
+            3 => GLOBAL_ENABLE::ENABLE3::Disable,
+            4 => GLOBAL_ENABLE::ENABLE4::Disable,
+            5 => GLOBAL_ENABLE::ENABLE5::Disable,
+            6 => GLOBAL_ENABLE::ENABLE6::Disable,
+            7 => GLOBAL_ENABLE::ENABLE7::Disable,
+            8 => GLOBAL_ENABLE::ENABLE8::Disable,
+            9 => GLOBAL_ENABLE::ENABLE9::Disable,
+            10 => GLOBAL_ENABLE::ENABLE10::Disable,
+            11 => GLOBAL_ENABLE::ENABLE11::Disable,
+            12 => GLOBAL_ENABLE::ENABLE12::Disable,
+            13 => GLOBAL_ENABLE::ENABLE13::Disable,
+            14 => GLOBAL_ENABLE::ENABLE14::Disable,
+            15 => GLOBAL_ENABLE::ENABLE15::Disable,
+            _ => {
+                return;
+            }
+        };
+        self.ENABLE.modify(disable);
+    }
+
+    pub fn exec(&self, ch: usize, cs: &ControlBlock4) {
+        if ch > 15 {
+            return;
+        }
+        compiler_fence(core::sync::atomic::Ordering::Release);
         let raw_addr: *const ControlBlock4 = cs;
-        self.Channels[0].CONBLK_AD.set(raw_addr as u32);
-        self.Channels[0].CS.write(CS::ACTIVE::Enable);
+        self.Channels[ch].CONBLK_AD.set(raw_addr as u32);
+        self.Channels[ch].CS.write(CS::ACTIVE::Enable);
     }
 
     pub fn wait_end(&self, ch: usize) {
@@ -642,6 +693,6 @@ impl DMAC4 {
         if ch > 15 {
             return;
         }
-        self.Channels[0].CS.write(CS::END::Clear);
+        self.Channels[ch].CS.write(CS::END::Clear);
     }
 }

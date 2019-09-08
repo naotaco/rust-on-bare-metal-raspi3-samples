@@ -72,11 +72,12 @@ fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
 fn memcpy_dmac(src: u32, dest: u32, size: usize, burst: u8) {
     let cb = dmac::ControlBlock4::new(src, dest, size as u32, burst);
     let d4 = dmac::DMAC4::new();
+    let ch: usize = 0;
     d4.init();
-    d4.turn_on_ch0();
-    d4.exec(&cb);
-    d4.wait_end(0);
-    d4.clear(0);
+    d4.turn_on(ch);
+    d4.exec(ch, &cb);
+    d4.wait_end(ch);
+    d4.clear(ch);
 }
 
 fn memcpy_cpu(src: u32, dest: u32, size: usize) {
@@ -111,9 +112,9 @@ fn run_trans_test(
     burst: u8,
     use_dma: bool,
 ) {
-    /*     let timer = timer::TIMER::new();
+    let timer = timer::TIMER::new();
     let start = timer.get_counter64();
-    gpio.pin5(true); */
+    gpio.pin5(true);
     //print_time(&uart);
     //uart.puts("starting memcpy.\n");
 
@@ -124,7 +125,7 @@ fn run_trans_test(
     }
     // memcpy_cpu(src, dest, size);
 
-    /*     gpio.pin5(false);
+    gpio.pin5(false);
     let end = timer.get_counter64();
 
     uart.puts("done! size: 0x");
@@ -133,7 +134,7 @@ fn run_trans_test(
     uart.hex(burst as u32);
     uart.puts(" duration: 0x");
     uart.hex(((end - start) & 0xFFFF_FFFF) as u32);
-    uart.puts("\n"); */
+    uart.puts("\n");
 }
 
 fn kernel_entry() -> ! {
