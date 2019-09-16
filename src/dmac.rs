@@ -1,10 +1,6 @@
-use super::MMIO_BASE;
 use core::ops::{Deref, DerefMut};
-use core::sync::atomic::{compiler_fence, fence, Ordering::Release};
-use register::{
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
-    register_bitfields,
-};
+use core::sync::atomic::compiler_fence;
+use register::{mmio::ReadWrite, register_bitfields};
 
 pub struct DMAC {
     _some_data: u32,
@@ -343,7 +339,7 @@ impl ControlBlock {
 
 const DMAC_BASE: u32 = super::MMIO_BASE + 0x7200;
 
-impl core::ops::Deref for DMAC {
+impl Deref for DMAC {
     type Target = RegisterBlock;
 
     fn deref(&self) -> &Self::Target {
@@ -437,14 +433,14 @@ pub struct RegisterDMAC2 {
     SOME_DATA: u32,
 }
 
-impl core::ops::Deref for DMAC2 {
+impl Deref for DMAC2 {
     type Target = RegisterDMAC2;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.ptr() }
     }
 }
 
-impl core::ops::DerefMut for DMAC2 {
+impl DerefMut for DMAC2 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.ptr() }
     }
@@ -493,7 +489,7 @@ pub struct DmaChannelRegister3 {
     __reserved: [u32; 0x37],                      // padding~ 0x100
 }
 
-impl core::ops::Deref for DMAC3 {
+impl Deref for DMAC3 {
     type Target = RegisterBlock3;
 
     fn deref(&self) -> &Self::Target {
@@ -521,6 +517,7 @@ impl DMAC3 {
 /// Data structure used to order DMA settings/options.
 /// Write data on DDR accordingly and tell it's address to DMA.
 /// Values ordered by these members can be observed on register as comment follows.
+#[allow(non_snake_case)]
 #[repr(C, align(32))]
 pub struct ControlBlock4 {
     pub TI: ReadWrite<u32, TI::Register>, // 0x00, accociated to TI register.
@@ -544,7 +541,7 @@ impl ControlBlock4 {
             __reserved: [0; 2],
         };
 
-        let burst = match burst {
+        match burst {
             2 => {
                 cb.TI.modify(
                     TI::BURST_LENGTH::Burst2
@@ -581,7 +578,7 @@ impl ControlBlock4 {
     }
 }
 
-impl core::ops::Deref for DMAC4 {
+impl Deref for DMAC4 {
     type Target = RegisterBlock;
 
     fn deref(&self) -> &Self::Target {

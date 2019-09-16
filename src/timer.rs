@@ -1,7 +1,5 @@
-use super::MMIO_BASE;
-use core::ops::{Deref, DerefMut};
 use register::{
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
+    mmio::{ReadOnly, ReadWrite},
     register_bitfields,
 };
 

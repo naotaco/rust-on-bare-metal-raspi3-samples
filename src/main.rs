@@ -32,7 +32,6 @@ const MMIO_BASE: u32 = 0x3F00_0000;
 mod arm_debug;
 mod dmac;
 mod gpio;
-mod interrupt;
 mod mbox;
 mod timer;
 mod uart;
@@ -142,7 +141,6 @@ fn kernel_entry() -> ! {
 
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();
-    let gpio = gpio::GPIO::new();
 
     // set up serial console
     match uart.init(&mut mbox) {
@@ -171,12 +169,14 @@ fn kernel_entry() -> ! {
     // ControlBlockのアドレスを設定して実行
     d4.exec(0, &cb);
 
-    /*     run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
+    /*
+    run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
     run_trans_test(&gpio, &uart, src, dest, size, 0, true);
     run_trans_test(&gpio, &uart, src, dest, size, 2, true);
     run_trans_test(&gpio, &uart, src, dest, size, 4, true);
     run_trans_test(&gpio, &uart, src, dest, size, 8, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 16, true); */
+    run_trans_test(&gpio, &uart, src, dest, size, 16, true);
+    */
 
     dump(dest, size, &uart);
 
