@@ -76,3 +76,12 @@ gdb: clean $(SOURCES)
 
 gdb-opt0: clean $(SOURCES)
 	$(call gen_gdb,-C debuginfo=2 -C opt-level=0)
+
+dump: clean $(SOURCES)
+	# cargo xrustc --target=$(TARGET) --release -- -C debuginfo=2 -C opt-level=0
+	cargo xrustc --target=$(TARGET) --release -- -C debuginfo=2
+	cp target/aarch64-unknown-none/release/kernel8 kernel8_debug
+	cargo objdump --target $(TARGET) -- -disassemble -print-imm-hex kernel8_debug > dump.s
+
+expand:
+	cargo expand

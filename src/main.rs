@@ -26,104 +26,121 @@
 #![no_std]
 #![no_main]
 #![feature(asm)]
-#![feature(alloc)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
 mod arm_debug;
+mod dmac;
 mod gpio;
 mod mbox;
+mod timer;
 mod uart;
 
-extern crate alloc;
-extern crate nt_allocator;
-
-use alloc::vec::Vec;
-use nt_allocator::NtGlobalAlloc;
-
-#[global_allocator]
-static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
-    base: 0x0100_0000,
-    size: 0x0400_0000,
-};
-
-fn alloc_test_u32(uart: &uart::Uart) {
-    let max: u32 = 32;
-    let mut v: Vec<u32> = Vec::new();
-    let mut last_pointer = 0 as *const u32;
-
-    for i in 0..max {
-        let value = i as u32;
-
-        v.push(value);
-
-        if last_pointer != &v[0] {
-            uart.puts("(Re)alloc detected!\nstart addr: ");
-            let start: *const u32 = &v[0];
-            uart.hex(start as u32);
-            uart.puts("\n");
-            uart.puts("len     : 0x");
-            uart.hex(v.len() as u32);
-            uart.puts("\ncapacity: 0x");
-            uart.hex(v.capacity() as u32);
-            uart.puts("\n");
-            last_pointer = &v[0];
+fn init(data_addr: u32, size: usize, init_data: u32) {
+    for i in 0..size / 4 {
+        let p: *mut u32 = (data_addr + (i * 4) as u32) as *mut u32;
+        unsafe {
+            *p = init_data + i as u32;
         }
-    }
-
-    for i in 0..max {
-        uart.hex(i);
-        uart.puts(": ");
-        uart.hex(v[i as usize]);
-        uart.puts("\n")
     }
 }
 
-fn alloc_test_f64(uart: &uart::Uart) {
-    let max: u32 = 32;
-    let mut v: Vec<f64> = Vec::new();
-    let mut last_pointer = 0 as *const f64;
-
-    for i in 0..max {
-        let value = i as f64;
-
-        v.push(value);
-
-        if last_pointer != &v[0] {
-            uart.puts("(Re)alloc detected!\nstart addr: ");
-            let start: *const f64 = &v[0];
-            uart.hex(start as u32);
-            uart.puts("\n");
-            uart.puts("len     : 0x");
-            uart.hex(v.len() as u32);
-            uart.puts("\ncapacity: 0x");
-            uart.hex(v.capacity() as u32);
-            uart.puts("\n");
-            last_pointer = &v[0];
+fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
+    if size <= 128 {
+        for i in 0..size / 4 {
+            if i % 4 == 0 {
+                uart.hex(data_addr);
+                uart.puts(": ");
+            }
+            let p: *mut u32 = (data_addr + (i * 4) as u32) as *mut u32;
+            unsafe {
+                uart.hex(*p);
+            }
+            if i % 4 == 3 {
+                uart.puts("\n");
+            }
         }
-    }
-
-    for i in 0..max {
-        uart.hex(i);
-        uart.puts(": ");
-        uart.hex(v[i as usize] as u32);
-        uart.puts("\n")
+    } else {
+        dump(data_addr, 64, &uart);
+        uart.puts(".......\n");
+        dump(data_addr + size as u32 - 64, 64, &uart);
+        uart.puts("\n");
     }
 }
 
-fn float_test(a: f64) -> f64 {
-    let b = a * (0x23 as f64);
-    b
+fn memcpy_dmac(src: u32, dest: u32, size: usize, burst: u8) {
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32, burst);
+    let d4 = dmac::DMAC4::new();
+    let ch: usize = 0;
+    d4.init();
+    d4.turn_on(ch);
+    d4.exec(ch, &cb);
+    d4.wait_end(ch);
+    d4.clear(ch);
+}
+
+fn memcpy_cpu(src: u32, dest: u32, size: usize) {
+    if src < dest {
+        if src + size as u32 >= dest {
+            return;
+        }
+    } else {
+        if dest + size as u32 >= src {
+            return;
+        }
+    }
+
+    unsafe {
+        core::intrinsics::copy_nonoverlapping(src as *mut u32, dest as *mut u32, size);
+    }
+}
+
+fn print_time(uart: &uart::Uart) {
+    let timer = timer::TIMER::new();
+    uart.puts("time: ");
+    uart.hex(timer.get_counter32());
+    uart.puts("\n");
+}
+
+fn run_trans_test(
+    gpio: &gpio::GPIO,
+    uart: &uart::Uart,
+    src: u32,
+    dest: u32,
+    size: usize,
+    burst: u8,
+    use_dma: bool,
+) {
+    let timer = timer::TIMER::new();
+    let start = timer.get_counter64();
+    gpio.pin5(true);
+    //print_time(&uart);
+    //uart.puts("starting memcpy.\n");
+
+    if use_dma {
+        memcpy_dmac(src, dest, size, burst);
+    } else {
+        memcpy_cpu(src, dest, size);
+    }
+    // memcpy_cpu(src, dest, size);
+
+    gpio.pin5(false);
+    let end = timer.get_counter64();
+
+    uart.puts("done! size: 0x");
+    uart.hex(size as u32);
+    uart.puts(" burst: ");
+    uart.hex(burst as u32);
+    uart.puts(" duration: 0x");
+    uart.hex(((end - start) & 0xFFFF_FFFF) as u32);
+    uart.puts("\n");
 }
 
 fn kernel_entry() -> ! {
-    let mut mbox = mbox::Mbox::new();
-    let uart = uart::Uart::new();
     arm_debug::setup_debug();
 
-    unsafe {
-        GLOBAL_ALLOCATOR.init();
-    }
+    let uart = uart::Uart::new();
+    let mut mbox = mbox::Mbox::new();
 
     // set up serial console
     match uart.init(&mut mbox) {
@@ -132,13 +149,36 @@ fn kernel_entry() -> ! {
             unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
         },
     }
+    // Section 2.4, 2.5
+    let src = 0x200_0000;
+    let dest = 0x300_0000;
+    let size = 64;
 
-    uart.puts("Greetings fellow Rustacean!\n");
+    uart.puts("Initializing...\n");
 
-    alloc_test_u32(&uart);
-    // alloc_test_f64(&uart);
+    init(src, size, 0xFF00_0000);
+    init(dest, size, 0x1200_0000);
 
-    uart.hex((float_test(0.1) * 100.1) as u32);
+    dump(src, size, &uart);
+    dump(dest, size, &uart);
+
+    // アドレスを渡してControlBlockを初期化.
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
+    let d4 = dmac::DMAC4::new();
+    d4.turn_on(0);
+    // ControlBlockのアドレスを設定して実行
+    d4.exec(0, &cb);
+
+    /*
+    run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
+    run_trans_test(&gpio, &uart, src, dest, size, 0, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 2, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 4, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 8, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 16, true);
+    */
+
+    dump(dest, size, &uart);
 
     loop {}
 }

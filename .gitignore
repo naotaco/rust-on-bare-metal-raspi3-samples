@@ -2,5 +2,5 @@ target
 kernel8*
 Cargo.lock
 **/*.rs.bk
-
+.gdb_history
 nt-global-alloc-rs
