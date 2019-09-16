@@ -151,35 +151,32 @@ fn kernel_entry() -> ! {
             unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
         },
     }
-    // sample 0
-    // dmac::DMAC0::write_data();
-
-    // sample1
-    // dmac::DMAC1::write_data();
+    // Section 2.4, 2.5
     let src = 0x200_0000;
-    let dest = 0x400_0000;
-    let size = 0x100_0000;
+    let dest = 0x300_0000;
+    let size = 64;
 
-    gpio.pin5(true);
-    print_time(&uart);
     uart.puts("Initializing...\n");
 
     init(src, size, 0xFF00_0000);
     init(dest, size, 0x1200_0000);
 
-    gpio.pin5(false);
-    print_time(&uart);
-    uart.puts("Initializing.......done! \n");
-
     dump(src, size, &uart);
     dump(dest, size, &uart);
 
-    run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
+    // アドレスを渡してControlBlockを初期化.
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
+    let d4 = dmac::DMAC4::new();
+    d4.turn_on(0);
+    // ControlBlockのアドレスを設定して実行
+    d4.exec(0, &cb);
+
+    /*     run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
     run_trans_test(&gpio, &uart, src, dest, size, 0, true);
     run_trans_test(&gpio, &uart, src, dest, size, 2, true);
     run_trans_test(&gpio, &uart, src, dest, size, 4, true);
     run_trans_test(&gpio, &uart, src, dest, size, 8, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 16, true);
+    run_trans_test(&gpio, &uart, src, dest, size, 16, true); */
 
     dump(dest, size, &uart);
 
