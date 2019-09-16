@@ -32,9 +32,22 @@ const MMIO_BASE: u32 = 0x3F00_0000;
 mod arm_debug;
 mod dmac;
 mod gpio;
+mod interrupt;
 mod mbox;
+mod singleton;
 mod timer;
 mod uart;
+
+extern crate alloc;
+extern crate nt_allocator;
+use alloc::vec::Vec;
+use nt_allocator::NtGlobalAlloc;
+
+#[global_allocator]
+static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
+    base: 0x400_0000,
+    size: 0x200_0000,
+};
 
 fn init(data_addr: u32, size: usize, init_data: u32) {
     for i in 0..size / 4 {
@@ -136,8 +149,53 @@ fn run_trans_test(
     uart.puts("\n");
 }
 
+fn vec_trans_test(uart: &uart::Uart) {
+    let mut src: Vec<u32> = Vec::new();
+    let mut dest: Vec<u32> = Vec::new();
+
+    for i in 0..0x100 {
+        src.push(i);
+        dest.push(0);
+    }
+
+    dump(src.as_ptr() as u32, src.len(), &uart);
+    dump(dest.as_ptr() as u32, dest.len(), &uart);
+
+    let dmac = dmac::DMACWrapper::new(0, &src, &mut dest);
+    dmac.exec();
+    let dest2 = dmac.wait_end();
+    dump(dest2.as_ptr() as u32, dest2.len(), &uart);
+}
+
+fn static_trans_test(uart: &uart::Uart) {
+    uart.puts("Start\n");
+    const BUF_LEN: usize = 0x100;
+    static SRC: &'static [u32] = &[0xff; BUF_LEN];
+    let dest: &'static mut [u32] = match singleton!(: [u32; BUF_LEN] = [0; BUF_LEN]) {
+        Some(v) => v,   // 1st attempt
+        None => return, // 2nd or later
+    };
+
+    dump(SRC.as_ptr() as u32, SRC.len() * 4, &uart);
+    dump(dest.as_ptr() as u32, dest.len() * 4, &uart);
+
+    let dmac = dmac::DMACWrapper2::new(0, SRC, dest);
+
+    uart.puts("---\n");
+    dmac.exec();
+
+    let dest2 = dmac.wait_end();
+
+    dump(dest2.as_ptr() as u32, dest2.len() * 4, &uart);
+    uart.puts("done\n");
+}
+
 fn kernel_entry() -> ! {
     arm_debug::setup_debug();
+
+    unsafe {
+        GLOBAL_ALLOCATOR.init();
+    }
 
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();
@@ -149,36 +207,10 @@ fn kernel_entry() -> ! {
             unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
         },
     }
-    // Section 2.4, 2.5
-    let src = 0x200_0000;
-    let dest = 0x300_0000;
-    let size = 64;
 
-    uart.puts("Initializing...\n");
-
-    init(src, size, 0xFF00_0000);
-    init(dest, size, 0x1200_0000);
-
-    dump(src, size, &uart);
-    dump(dest, size, &uart);
-
-    // アドレスを渡してControlBlockを初期化.
-    let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
-    let d4 = dmac::DMAC4::new();
-    d4.turn_on(0);
-    // ControlBlockのアドレスを設定して実行
-    d4.exec(0, &cb);
-
-    /*
-    run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
-    run_trans_test(&gpio, &uart, src, dest, size, 0, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 2, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 4, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 8, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 16, true);
-    */
-
-    dump(dest, size, &uart);
+    // Chapter 3.2
+    vec_trans_test(&uart);
+    static_trans_test(&uart);
 
     loop {}
 }

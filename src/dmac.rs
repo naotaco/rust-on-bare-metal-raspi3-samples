@@ -2,6 +2,9 @@ use core::ops::{Deref, DerefMut};
 use core::sync::atomic::compiler_fence;
 use register::{mmio::ReadWrite, register_bitfields};
 
+extern crate alloc;
+use alloc::vec::Vec;
+
 pub struct DMAC {
     _some_data: u32,
 }
@@ -691,5 +694,79 @@ impl DMAC4 {
             return;
         }
         self.Channels[ch].CS.write(CS::END::Clear);
+    }
+}
+
+pub struct DMACWrapper<'a, T> {
+    src: &'a Vec<T>,
+    dest: &'a mut Vec<T>,
+    cb: ControlBlock4,
+    ch: usize,
+    dmac: DMAC4,
+}
+
+impl<'a, T> DMACWrapper<'a, T> {
+    pub fn new(burst: u8, src: &'a Vec<T>, dest: &'a mut Vec<T>) -> DMACWrapper<'a, T> {
+        let s: u32 = src.as_ptr() as u32;
+        let d: u32 = dest.as_ptr() as u32;
+        let len = core::cmp::min(src.len(), dest.len()) * core::mem::size_of::<T>();
+        let cb = ControlBlock4::new(s, d, len as u32, burst);
+        let dmac = DMAC4::new();
+        dmac.init();
+        DMACWrapper {
+            cb: cb,
+            src: src,
+            dest: dest,
+            ch: 0, // todo: alloc itself.
+            dmac: dmac,
+        }
+    }
+
+    pub fn exec(&self) {
+        self.dmac.turn_on(self.ch);
+        self.dmac.exec(self.ch, &(self.cb));
+    }
+
+    pub fn wait_end(self) -> &'a mut Vec<T> {
+        self.dmac.wait_end(self.ch);
+        self.dmac.clear(self.ch);
+        self.dest
+    }
+}
+
+pub struct DMACWrapper2<'a> {
+    src: &'a [u32],
+    dest: &'a mut [u32],
+    cb: ControlBlock4,
+    ch: usize,
+    dmac: DMAC4,
+}
+
+impl<'a> DMACWrapper2<'a> {
+    pub fn new(burst: u8, src: &'a [u32], dest: &'a mut [u32]) -> DMACWrapper2<'a> {
+        let s: u32 = src.as_ptr() as u32;
+        let d: u32 = dest.as_ptr() as u32;
+        let len = core::cmp::min(src.len(), dest.len()) * 4;
+        let cb = ControlBlock4::new(s, d, len as u32, burst);
+        let dmac = DMAC4::new();
+        dmac.init();
+        DMACWrapper2 {
+            cb: cb,
+            src: src,
+            dest: dest,
+            ch: 0, // todo: alloc itself.
+            dmac: dmac,
+        }
+    }
+
+    pub fn exec(&self) {
+        self.dmac.turn_on(self.ch);
+        self.dmac.exec(self.ch, &(self.cb));
+    }
+
+    pub fn wait_end(self) -> &'a mut [u32] {
+        self.dmac.wait_end(self.ch);
+        self.dmac.clear(self.ch);
+        self.dest
     }
 }
