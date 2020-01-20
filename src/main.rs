@@ -141,10 +141,6 @@ fn run_trans_test(
 
 fn kernel_entry() -> ! {
     arm_debug::setup_debug();
-    unsafe {
-        exception::set_vbar_el1();
-    }
-
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();
     let gpio = gpio::GPIO::new();
@@ -156,6 +152,13 @@ fn kernel_entry() -> ! {
             unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
         },
     }
+
+    unsafe {
+        let addr = exception::set_vbar_el1();
+        uart.puts("set vbar");
+        uart.hex((addr & 0xFFFF_FFFF) as u32);
+    }
+
     // Section 2.4, 2.5
     let src = 0x200_0000;
     let dest = 0x300_0000;
@@ -175,13 +178,6 @@ fn kernel_entry() -> ! {
     d4.turn_on(0);
     // ControlBlockのアドレスを設定して実行
     d4.exec(0, &cb);
-
-    /*     run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
-    run_trans_test(&gpio, &uart, src, dest, size, 0, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 2, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 4, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 8, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 16, true); */
 
     dump(dest, size, &uart);
 

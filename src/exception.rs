@@ -41,8 +41,13 @@ struct EsrEL1;
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
 
+const TEST_OUT: u32 = 0x400_0000;
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
+    let test_out: *mut u32 = TEST_OUT as u32 as *mut u32;
+    unsafe {
+        *test_out = 0xabcabc12;
+    }
     panic!(
         "\n\nCPU Exception!\n\
          FAR_EL1: {:#018x}\n\
@@ -229,7 +234,7 @@ impl fmt::Display for ExceptionContext {
 ///
 /// - The vector table and the symbol `__exception_vector_table_start` from the linker script must
 ///   adhere to the alignment and size constraints demanded by the AArch64 spec.
-pub unsafe fn set_vbar_el1() {
+pub unsafe fn set_vbar_el1() -> u64 {
     // Provided by exception.S.
     extern "C" {
         static mut __exception_vector_start: u64;
@@ -240,6 +245,8 @@ pub unsafe fn set_vbar_el1() {
 
     // Force VBAR update to complete before next instruction.
     barrier::isb(barrier::SY);
+
+    addr
 }
 
 pub trait DaifField {

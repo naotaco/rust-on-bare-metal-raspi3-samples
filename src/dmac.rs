@@ -341,7 +341,7 @@ impl ControlBlock {
     }
 }
 
-const DMAC_BASE: u32 = super::MMIO_BASE + 0x7200;
+const DMAC_BASE: u32 = super::MMIO_BASE + 0x7000;
 
 impl core::ops::Deref for DMAC {
     type Target = RegisterBlock;
