@@ -26,11 +26,13 @@
 #![no_std]
 #![no_main]
 #![feature(asm)]
+#![feature(global_asm)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
 mod arm_debug;
 mod dmac;
+mod exception;
 mod gpio;
 mod interrupt;
 mod mbox;
@@ -139,6 +141,9 @@ fn run_trans_test(
 
 fn kernel_entry() -> ! {
     arm_debug::setup_debug();
+    unsafe {
+        exception::set_vbar_el1();
+    }
 
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();

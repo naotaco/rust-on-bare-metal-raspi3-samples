@@ -3,7 +3,7 @@ use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{compiler_fence, fence, Ordering::Release};
 use register::{
     mmio::{ReadOnly, ReadWrite, WriteOnly},
-    register_bitfields,
+    register_bitfields, InMemoryRegister,
 };
 
 pub struct DMAC {
@@ -523,19 +523,19 @@ impl DMAC3 {
 /// Values ordered by these members can be observed on register as comment follows.
 #[repr(C, align(32))]
 pub struct ControlBlock4 {
-    pub TI: ReadWrite<u32, TI::Register>, // 0x00, accociated to TI register.
-    pub source_address: u32,              // 0x04, SOURCE_AD
-    pub destination_address: u32,         // 0x08, DEST_AD
-    pub transfer_length: u32,             // 0x0C, TXFR_LEN
-    pub two_d_mode_stride: u32,           // 0x10, STRIDE
-    pub next_control_block_address: u32,  // 0x14, NEXTCONBK
-    __reserved: [u32; 2],                 // N/A
+    pub TI: InMemoryRegister<u32, TI::Register>, // 0x00, accociated to TI register.
+    pub source_address: u32,                     // 0x04, SOURCE_AD
+    pub destination_address: u32,                // 0x08, DEST_AD
+    pub transfer_length: u32,                    // 0x0C, TXFR_LEN
+    pub two_d_mode_stride: u32,                  // 0x10, STRIDE
+    pub next_control_block_address: u32,         // 0x14, NEXTCONBK
+    __reserved: [u32; 2],                        // N/A
 }
 
 impl ControlBlock4 {
     pub fn new(src: u32, dest: u32, length: u32, burst: u8) -> ControlBlock4 {
         let cb = ControlBlock4 {
-            TI: ReadWrite::<u32, TI::Register>::new(0),
+            TI: InMemoryRegister::<u32, TI::Register>::new(0),
             source_address: src,
             destination_address: dest,
             transfer_length: length,
@@ -576,7 +576,8 @@ impl ControlBlock4 {
             _ => cb.TI.modify(TI::BURST_LENGTH::Single),
         };
 
-        cb.TI.modify(TI::DEST_INC::Enabled + TI::SRC_INC::Enabled);
+        cb.TI
+            .modify(TI::DEST_INC::Enabled + TI::SRC_INC::Enabled + TI::INTEN::Enabled);
         cb
     }
 }
