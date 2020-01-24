@@ -37,9 +37,9 @@ extern crate panic_abort;
 macro_rules! entry {
     ($path:path) => {
         #[export_name = "main"]
-        pub unsafe fn __main() -> ! {
+        pub unsafe fn __main() {
             // type check the given path
-            let f: fn() -> ! = $path;
+            let f: fn() = $path;
 
             f()
         }

@@ -42,21 +42,15 @@ struct EsrEL1;
 //--------------------------------------------------------------------------------------------------
 
 const TEST_OUT: u32 = 0x400_0000;
+static mut exception_count: u32 = 0;
+
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
-    let test_out: *mut u32 = TEST_OUT as u32 as *mut u32;
     unsafe {
-        *test_out = 0xabcabc12;
+        let test_out: *mut u32 = (TEST_OUT + exception_count) as u32 as *mut u32;
+        *test_out = 0xdead0000 + exception_count;
+        exception_count += 1;
     }
-    panic!(
-        "\n\nCPU Exception!\n\
-         FAR_EL1: {:#018x}\n\
-         {}\n\
-         {}",
-        FAR_EL1.get(),
-        EsrEL1 {},
-        e
-    );
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -284,4 +278,37 @@ impl DaifField for FIQ {
 
 pub fn is_masked<T: DaifField>() -> bool {
     DAIF.is_set(T::daif_field())
+}
+
+#[inline(always)]
+pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
+    // Enable timer counter registers for EL1.
+    CNTHCTL_EL2.write(CNTHCTL_EL2::EL1PCEN::SET + CNTHCTL_EL2::EL1PCTEN::SET);
+
+    // No offset for reading the counters.
+    CNTVOFF_EL2.set(0);
+
+    // Set EL1 execution state to AArch64.
+    HCR_EL2.write(HCR_EL2::RW::EL1IsAarch64);
+
+    // Set up a simulated exception return.
+    //
+    // First, fake a saved program status, where all interrupts were masked and SP_EL1 was used as a
+    // stack pointer.
+    SPSR_EL2.write(
+        SPSR_EL2::D::Masked
+            + SPSR_EL2::A::Masked
+            + SPSR_EL2::I::Masked
+            + SPSR_EL2::F::Masked
+            + SPSR_EL2::M::EL1h,
+    );
+
+    // Second, let the link register point to init().
+    ELR_EL2.set(addr);
+
+    // Set up SP_EL1 (stack pointer), which will be used by EL1 once we "return" to it.
+    SP_EL1.set(0x80000);
+
+    // Use `eret` to "return" to EL1. This will result in execution of `reset()` in EL1.
+    asm::eret()
 }

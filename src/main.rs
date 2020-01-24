@@ -139,7 +139,13 @@ fn run_trans_test(
     uart.puts("\n");
 }
 
-fn kernel_entry() -> ! {
+fn kernel_entry() {
+    unsafe {
+        exception::el2_to_el1_transition(user_main as *const () as u64);
+    }
+}
+
+fn user_main() -> ! {
     arm_debug::setup_debug();
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();
@@ -177,7 +183,7 @@ fn kernel_entry() -> ! {
     let d4 = dmac::DMAC4::new();
     d4.turn_on(0);
     // ControlBlockのアドレスを設定して実行
-    d4.exec(0, &cb);
+    // d4.exec(0, &cb);
 
     dump(dest, size, &uart);
 
