@@ -6,6 +6,7 @@
 #![feature(global_asm)]
 #![feature(asm)]
 
+use crate::uart;
 use core::fmt;
 use cortex_a::{asm, barrier, regs::*};
 use register::{
@@ -46,7 +47,11 @@ static mut exception_count: u32 = 0;
 
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
+    let uart = uart::Uart::new();
     unsafe {
+        uart.puts("At exception handler from 0x");
+        uart.hex(e.lr as u32);
+        uart.puts("\n");
         let test_out: *mut u32 = (TEST_OUT + exception_count) as u32 as *mut u32;
         *test_out = 0xdead0000 + exception_count;
         exception_count += 1;

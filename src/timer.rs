@@ -12,7 +12,7 @@ pub struct TIMER {}
 #[allow(non_snake_case)]
 #[repr(C)]
 pub struct RegisterBlock {
-    CS: ReadWrite<u32>,
+    CS: ReadWrite<u32, CS::Register>,
     CLO: ReadOnly<u32, CLO::Register>,
     CLH: ReadOnly<u32, CLH::Register>,
     C0: ReadWrite<u32>,
@@ -24,6 +24,24 @@ pub struct RegisterBlock {
 register_bitfields! {
     u32,
     /// Control and status. common for 0-14 ch.
+    CS [
+        M3 OFFSET(3) NUMBITS(1)[
+            Match=1,
+            NoMatch=0
+        ],
+        M2 OFFSET(2) NUMBITS(1)[
+            Match=1,
+            NoMatch=0
+        ],
+        M1 OFFSET(1) NUMBITS(1)[
+            Match=1,
+            NoMatch=0
+        ],
+        M0 OFFSET(0) NUMBITS(1)[
+            Match=1,
+            NoMatch=0
+        ]
+    ],
     CLO [
         TIME OFFSET(0) NUMBITS(32) [ ]
     ],
@@ -53,5 +71,24 @@ impl TIMER {
 
     pub fn get_counter32(&self) -> u32 {
         self.CLO.read(CLO::TIME)
+    }
+
+    pub fn set_c1(&self, t: u32) {
+        self.C1.set(t);
+    }
+
+    pub fn set_c3(&self, t: u32) {
+        self.C3.set(t);
+    }
+
+    pub fn is_match_c1(&self) -> bool {
+        //self.CS.read(CS::M1) == CS::M1::Match
+        self.CS.is_set(CS::M1)
+        // let a: u32 = CS::M1::Match;
+        // == CS::M1::Match;
+    }
+
+    pub fn is_match_c3(&self) -> bool {
+        self.CS.is_set(CS::M3)
     }
 }

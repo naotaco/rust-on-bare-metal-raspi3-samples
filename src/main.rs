@@ -183,10 +183,26 @@ fn user_main() -> ! {
     let d4 = dmac::DMAC4::new();
     d4.turn_on(0);
     // ControlBlockのアドレスを設定して実行
-    // d4.exec(0, &cb);
+    d4.exec(0, &cb);
 
     dump(dest, size, &uart);
 
+    // let a = 10 - 9 - 1;
+    // let b = 11 / a;
+    // uart.hex(b);
+
+    let timer = timer::TIMER::new();
+    let current = timer.get_counter32();
+    let duration = 100_0000; // maybe 1sec.
+    timer.set_c1(duration + current);
+    uart.hex(current);
+    uart.hex(duration);
+    loop {
+        if timer.is_match_c1() {
+            uart.puts("Matched!");
+            break;
+        }
+    }
     loop {}
 }
 

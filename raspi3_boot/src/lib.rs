@@ -69,3 +69,12 @@ pub unsafe extern "C" fn reset() -> ! {
 
 // Disable all cores except core 0, and then jump to reset()
 global_asm!(include_str!("boot_cores.S"));
+
+extern "C" {
+    fn _enable_irq();
+}
+
+/// Something here.
+pub unsafe fn enable_irq() {
+    // _enable_irq();
+}

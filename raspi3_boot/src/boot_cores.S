@@ -46,3 +46,14 @@ _boot_cores:
     bl      reset
     // for failsafe, halt this core too
     b       1b
+
+/*
+.global _enable_irq
+_enable_irq:
+    mrs x0, cpsr
+    bic x0, x0, #0x80
+    msr cpsr_c, x0
+    bx lr
+     */
+
+     
