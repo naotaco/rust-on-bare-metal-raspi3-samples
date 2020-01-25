@@ -192,6 +192,11 @@ fn user_main() -> ! {
     // let b = 11 / a;
     // uart.hex(b);
 
+    unsafe {
+        exception::SetIrqSourceToCore0();
+        raspi3_boot::enable_irq();
+    }
+
     let timer = timer::TIMER::new();
     let current = timer.get_counter32();
     let duration = 100_0000; // maybe 1sec.
@@ -207,9 +212,9 @@ fn user_main() -> ! {
 
     let arm_timer = arm_timer::ArmTimer::new();
     arm_timer.StartFreeRun();
-    loop {
-        uart.hex(arm_timer.ReadFreeFun());
-    }
+    arm_timer.EnableInt();
+    arm_timer.SetCountDown(1000000);
+
     loop {}
 }
 

@@ -27,6 +27,7 @@
 #![deny(warnings)]
 #![no_std]
 #![feature(global_asm)]
+#![feature(asm)]
 
 //! Low-level boot of the Raspberry's processor
 
@@ -77,4 +78,5 @@ extern "C" {
 /// Something here.
 pub unsafe fn enable_irq() {
     // _enable_irq();
+    asm!("msr daifclr, #2");
 }

@@ -33,8 +33,14 @@ register_bitfields! {
             Disabled=0
         ],
         RUN_IN_HALT OFFSET(8) NUMBITS(1)[],
-        ENABLED OFFSET(7) NUMBITS(1)[],
-        INT_EN OFFSET(5) NUMBITS(1)[],
+        ENABLED OFFSET(7) NUMBITS(1)[
+            Enabled=1,
+            Disabled=0
+        ],
+        INT_EN OFFSET(5) NUMBITS(1)[
+            Enabled=1,
+            Disabled=0
+        ],
         PRE_SCALE OFFSET(2) NUMBITS(2)[
             C_1_1=0, // clock/1
             C_1_16=1, // clock /16
@@ -46,10 +52,16 @@ register_bitfields! {
         ]
     ],
     RAW_IRQ[
-        PENDING OFFSET(0) NUMBITS(1)[]
+        PENDING OFFSET(0) NUMBITS(1)[
+            Enabled=1,
+            Disabled=0
+        ]
     ],
     MASKED_IRQ[
-        ASSERTED OFFSET(0) NUMBITS(1)[]
+        ASSERTED OFFSET(0) NUMBITS(1)[
+            Enabled=1,
+            Disabled=0
+        ]
     ]
 }
 
@@ -63,10 +75,16 @@ impl core::ops::Deref for ArmTimer {
 
 impl ArmTimer {
     pub fn new() -> ArmTimer {
-        ArmTimer {}
+        let t = ArmTimer {};
+        t.Enable();
+        t
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
+    }
+
+    fn Enable(&self) {
+        self.CONTROL.modify(CONTROL::ENABLED::Enabled);
     }
 
     pub fn StartFreeRun(&self) {
@@ -76,5 +94,17 @@ impl ArmTimer {
 
     pub fn ReadFreeFun(&self) -> u32 {
         self.FREE_RUN_COUNTER.get()
+    }
+
+    pub fn SetCountDown(&self, t: u32) {
+        self.LOAD.set(t);
+    }
+
+    pub fn ReadCountDown(&self) -> u32 {
+        self.VALUE.get()
+    }
+
+    pub fn EnableInt(&self) {
+        self.CONTROL.modify(CONTROL::INT_EN::Enabled);
     }
 }
