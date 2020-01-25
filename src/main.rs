@@ -179,6 +179,11 @@ fn user_main() -> ! {
     dump(src, size, &uart);
     dump(dest, size, &uart);
 
+    unsafe {
+        exception::SetIrqSourceToCore0();
+        raspi3_boot::enable_irq();
+    }
+
     // アドレスを渡してControlBlockを初期化.
     let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
     let d4 = dmac::DMAC4::new();
@@ -192,28 +197,23 @@ fn user_main() -> ! {
     // let b = 11 / a;
     // uart.hex(b);
 
-    unsafe {
-        exception::SetIrqSourceToCore0();
-        raspi3_boot::enable_irq();
-    }
+    // let timer = timer::TIMER::new();
+    // let current = timer.get_counter32();
+    // let duration = 100_0000; // maybe 1sec.
+    // timer.set_c1(duration + current);
+    // uart.hex(current);
+    // uart.hex(duration);
+    // loop {
+    //     if timer.is_match_c1() {
+    //         uart.puts("Matched!");
+    //         break;
+    //     }
+    // }
 
-    let timer = timer::TIMER::new();
-    let current = timer.get_counter32();
-    let duration = 100_0000; // maybe 1sec.
-    timer.set_c1(duration + current);
-    uart.hex(current);
-    uart.hex(duration);
-    loop {
-        if timer.is_match_c1() {
-            uart.puts("Matched!");
-            break;
-        }
-    }
-
-    let arm_timer = arm_timer::ArmTimer::new();
-    arm_timer.StartFreeRun();
-    arm_timer.EnableInt();
-    arm_timer.SetCountDown(1000000);
+    // let arm_timer = arm_timer::ArmTimer::new();
+    // arm_timer.StartFreeRun();
+    // arm_timer.EnableInt();
+    // arm_timer.SetCountDown(1000000);
 
     loop {}
 }

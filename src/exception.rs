@@ -45,6 +45,8 @@ struct EsrEL1;
 const TEST_OUT: u32 = 0x400_0000;
 static mut exception_count: u32 = 0;
 
+const DMA_CH0_CONT: u32 = 0x3F00_7000;
+
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
     let uart = uart::Uart::new();
@@ -52,9 +54,7 @@ fn default_exception_handler(e: &ExceptionContext) {
         uart.puts("At exception handler from 0x");
         uart.hex(e.lr as u32);
         uart.puts("\n");
-        let test_out: *mut u32 = (TEST_OUT + exception_count) as u32 as *mut u32;
-        *test_out = 0xdead0000 + exception_count;
-        exception_count += 1;
+        *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
     }
 }
 
