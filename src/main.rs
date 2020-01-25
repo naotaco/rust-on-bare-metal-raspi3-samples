@@ -31,6 +31,7 @@
 const MMIO_BASE: u32 = 0x3F00_0000;
 
 mod arm_debug;
+mod arm_timer;
 mod dmac;
 mod exception;
 mod gpio;
@@ -202,6 +203,12 @@ fn user_main() -> ! {
             uart.puts("Matched!");
             break;
         }
+    }
+
+    let arm_timer = arm_timer::ArmTimer::new();
+    arm_timer.StartFreeRun();
+    loop {
+        uart.hex(arm_timer.ReadFreeFun());
     }
     loop {}
 }
