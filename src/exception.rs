@@ -49,12 +49,41 @@ const DMA_CH0_CONT: u32 = 0x3F00_7000;
 
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
+    let lr = e.lr;
     let uart = uart::Uart::new();
     unsafe {
         uart.puts("At exception handler from 0x");
-        uart.hex(e.lr as u32);
+        uart.hex(lr as u32);
         uart.puts("\n");
-        *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
+    }
+}
+
+/// Print verbose information about the exception and the panic.
+fn irq_handler(e: &ExceptionContext) {
+    let lr = e.lr;
+    let uart = uart::Uart::new();
+    unsafe {
+        uart.puts("IRQ handler from 0x");
+        uart.hex(lr as u32);
+        uart.puts("\n");
+
+        let int = crate::interrupt::Interrupt::new();
+        let pend = int.GetRawPending();
+        for id in 0..63 {
+            if (pend & (1 << id)) != 0 {
+                match id {
+                    crate::interrupt::Interrupt::INT_NO_DMA => {
+                        uart.puts("Clear DMA int.\n");
+                        *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
+                    }
+                    _ => {
+                        uart.puts("Unknown int: ");
+                        uart.hex(id);
+                        uart.puts("\n");
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -89,7 +118,7 @@ unsafe extern "C" fn current_elx_synchronous(e: &mut ExceptionContext) {
 
 #[no_mangle]
 unsafe extern "C" fn current_elx_irq(e: &mut ExceptionContext) {
-    default_exception_handler(e);
+    irq_handler(e);
 }
 
 #[no_mangle]
