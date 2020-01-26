@@ -164,6 +164,8 @@ impl core::ops::Deref for Interrupt {
 
 impl Interrupt {
     pub const INT_NO_DMA: u32 = 16;
+    pub const BASIC_INT_NO_ARM_TIMER: u32 = 0;
+
     pub fn new() -> Interrupt {
         Interrupt {}
     }
@@ -206,5 +208,34 @@ impl Interrupt {
         } else {
             return false;
         }
+    }
+
+    pub fn EnableBasicIrq(&self, id: u32) {
+        if id < 8 {
+            self.ENABLE_BASIC_IRQ.set(1 << id);
+        }
+    }
+
+    pub fn DisableBasicIrq(&self, id: u32) {
+        if id < 8 {
+            self.DISABLE_BASIC_IRQ.set(1 << id);
+        }
+    }
+
+    pub fn IsBasicIrqPending(&self, id: u32) -> bool {
+        if id < 8 {
+            return (self.BASIC_PENDING.get() & (1 << id)) != 0;
+        }
+
+        false
+    }
+
+    pub fn IsAnyIrqPending(&self) -> bool {
+        self.BASIC_PENDING.is_set(BASIC_PENDING::PENDING_0)
+            || self.BASIC_PENDING.is_set(BASIC_PENDING::PENDING_1)
+    }
+
+    pub fn GetRawBasicPending(&self) -> u32 {
+        self.BASIC_PENDING.get()
     }
 }

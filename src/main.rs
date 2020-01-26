@@ -197,12 +197,24 @@ fn user_main() -> ! {
     // let b = 11 / a;
     // uart.hex(b);
 
-    // let timer = timer::TIMER::new();
-    // let current = timer.get_counter32();
-    // let duration = 100_0000; // maybe 1sec.
-    // timer.set_c1(duration + current);
-    // uart.hex(current);
-    // uart.hex(duration);
+    let int = interrupt::Interrupt::new();
+    int.EnableBasicIrq(interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER);
+    // uart.puts("Enabling Irq0\n");
+    // int.EnableIrq(0);
+    uart.puts("Enabling Irq1\n");
+    int.EnableIrq(1);
+    // uart.puts("Enabling Irq2\n");
+    // int.EnableIrq(2);
+    // uart.puts("Enabling Irq3\n");
+    // int.EnableIrq(3);
+
+    let timer = timer::TIMER::new();
+    let current = timer.get_counter32();
+    let duration = 500_0000; // maybe 1sec.
+    uart.puts("Starting timer\n");
+    timer.set_c1(duration + current);
+    uart.hex(current);
+    uart.hex(duration);
     // loop {
     //     if timer.is_match_c1() {
     //         uart.puts("Matched!");
@@ -210,10 +222,10 @@ fn user_main() -> ! {
     //     }
     // }
 
-    // let arm_timer = arm_timer::ArmTimer::new();
-    // arm_timer.StartFreeRun();
-    // arm_timer.EnableInt();
-    // arm_timer.SetCountDown(1000000);
+    let arm_timer = arm_timer::ArmTimer::new();
+    arm_timer.StartFreeRun();
+    arm_timer.EnableInt();
+    arm_timer.SetCountDown(1000000);
 
     loop {}
 }

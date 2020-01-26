@@ -107,4 +107,8 @@ impl ArmTimer {
     pub fn EnableInt(&self) {
         self.CONTROL.modify(CONTROL::INT_EN::Enabled);
     }
+
+    pub fn ClearIrq(&self) {
+        self.IRQ_CLEAR.set(1);
+    }
 }

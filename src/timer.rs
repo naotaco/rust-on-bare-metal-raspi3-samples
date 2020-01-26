@@ -91,4 +91,12 @@ impl TIMER {
     pub fn is_match_c3(&self) -> bool {
         self.CS.is_set(CS::M3)
     }
+
+    pub fn clear_c1(&self) {
+        self.CS.write(CS::M1::Match);
+    }
+
+    pub fn clear_c3(&self) {
+        self.CS.write(CS::M3::Match);
+    }
 }

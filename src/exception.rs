@@ -68,20 +68,62 @@ fn irq_handler(e: &ExceptionContext) {
         uart.puts("\n");
 
         let int = crate::interrupt::Interrupt::new();
-        let pend = int.GetRawPending();
-        for id in 0..63 {
-            if (pend & (1 << id)) != 0 {
-                match id {
-                    crate::interrupt::Interrupt::INT_NO_DMA => {
-                        uart.puts("Clear DMA int.\n");
-                        *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
-                    }
-                    _ => {
-                        uart.puts("Unknown int: ");
-                        uart.hex(id);
-                        uart.puts("\n");
+
+        if int.IsAnyIrqPending() {
+            let pend = int.GetRawPending();
+            uart.puts("IRQ pending: ");
+            uart.hex((pend & 0xFFFF_FFFF) as u32);
+            uart.puts(" ");
+            uart.hex(((pend >> 32) & 0xFFFF_FFFF) as u32);
+            uart.puts("\n");
+            let timer = crate::timer::TIMER::new();
+            for id in 0..63 {
+                if (pend & (1 << id)) != 0 {
+                    match id {
+                        1 => {
+                            uart.puts("Clearing timer C1\n");
+                            timer.clear_c1();
+                        }
+                        3 => {
+                            uart.puts("Clearing timer C3\n");
+                            timer.clear_c3();
+                        }
+                        crate::interrupt::Interrupt::INT_NO_DMA => {
+                            uart.puts("Clear DMA int.\n");
+                            *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
+                        }
+                        _ => {
+                            uart.puts("Unknown int: ");
+                            uart.hex(id);
+                            uart.puts("\n");
+                        }
                     }
                 }
+            }
+        } else {
+            let pend = int.GetRawBasicPending();
+            if pend != 0 {
+                uart.puts("Basic IRQ pending: ");
+                uart.hex(pend);
+                uart.puts("\n");
+                for id in 0..7 {
+                    if (pend & (1 << id)) != 0 {
+                        match id {
+                            crate::interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER => {
+                                uart.puts("Clear Timer interrupt.\n");
+                                let t = crate::arm_timer::ArmTimer::new();
+                                t.ClearIrq();
+                            }
+                            _ => {
+                                uart.puts("Unknown basic int: ");
+                                uart.hex(id);
+                                uart.puts("\n");
+                            }
+                        }
+                    }
+                }
+            } else {
+                uart.puts("Some unknown case...\n");
             }
         }
     }
