@@ -28,11 +28,27 @@ struct ExceptionContext {
     spsr_el1: SpsrEL1,
 }
 
+type Callback = fn(id: u32);
+
+pub struct IrqHandlers {
+    irq_callback: Callback,
+    basic_irq_callback: Callback,
+}
+
+impl IrqHandlers {
+    pub fn new(irq: Callback, basic_irq: Callback) -> IrqHandlers {
+        IrqHandlers {
+            irq_callback: irq,
+            basic_irq_callback: basic_irq,
+        }
+    }
+}
+
+static mut HANDLERS: Option<IrqHandlers> = None;
+
 //--------------------------------------------------------------------------------------------------
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
-
-const DMA_CH0_CONT: u32 = 0x3F00_7000;
 
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
@@ -45,11 +61,10 @@ fn default_exception_handler(e: &ExceptionContext) {
 
 /// Print verbose information about the exception and the panic.
 fn irq_handler(e: &ExceptionContext) {
-    let lr = e.lr;
     let uart = uart::Uart::new();
     unsafe {
         uart.puts("IRQ handler from 0x");
-        uart.hex(lr as u32);
+        uart.hex(e.elr_el1 as u32);
         uart.puts("\n");
 
         let int = crate::interrupt::Interrupt::new();
@@ -61,28 +76,10 @@ fn irq_handler(e: &ExceptionContext) {
             uart.puts(" ");
             uart.hex(((pend >> 32) & 0xFFFF_FFFF) as u32);
             uart.puts("\n");
-            let timer = crate::timer::TIMER::new();
             for id in 0..63 {
                 if (pend & (1 << id)) != 0 {
-                    match id {
-                        1 => {
-                            uart.puts("Clearing timer C1\n");
-                            timer.clear_c1();
-                        }
-                        3 => {
-                            uart.puts("Clearing timer C3\n");
-                            timer.clear_c3();
-                        }
-                        crate::interrupt::Interrupt::INT_NO_DMA => {
-                            uart.puts("Clear DMA int.\n");
-                            *(DMA_CH0_CONT as *mut u32) |= 0x1 << 2;
-                        }
-                        _ => {
-                            uart.puts("Unknown int: ");
-                            uart.hex(id);
-                            uart.puts("\n");
-                        }
-                    }
+                    let hs: &IrqHandlers = &HANDLERS.as_ref().unwrap();
+                    (hs.irq_callback)(id);
                 }
             }
         } else {
@@ -303,4 +300,10 @@ const IRQ_ENABLE1: u32 = 0x3F00B210;
 pub unsafe fn set_irq_source_to_core0() {
     *(GPU_INTERRUPTS_ROUTING as *mut u32) = 0; // use core0
     *(IRQ_ENABLE1 as *mut u32) = 1 << 16;
+}
+
+pub fn set_irq_handlers(callbacks: IrqHandlers) {
+    unsafe {
+        HANDLERS = Some(callbacks);
+    }
 }
