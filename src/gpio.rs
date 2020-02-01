@@ -124,6 +124,7 @@ impl core::ops::Deref for GPIO {
     }
 }
 
+#[allow(dead_code)]
 impl GPIO {
     pub fn new() -> GPIO {
         let g = GPIO {};

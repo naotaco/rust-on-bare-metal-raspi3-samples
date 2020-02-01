@@ -3,17 +3,10 @@
 // Copyright (c) 2018-2020 Andre Richter <andre.o.richter@gmail.com>
 
 //! Exception handling.
-#![feature(global_asm)]
-#![feature(asm)]
 
 use crate::uart;
-use core::fmt;
 use cortex_a::{asm, barrier, regs::*};
-use register::{
-    cpu::RegisterReadOnly,
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
-    register_bitfields,
-};
+use register::mmio::ReadWrite;
 
 // Assembly counterpart to this file.
 global_asm!(include_str!("exception.S"));
@@ -35,15 +28,9 @@ struct ExceptionContext {
     spsr_el1: SpsrEL1,
 }
 
-/// Wrapper struct for pretty printing ESR_EL1.
-struct EsrEL1;
-
 //--------------------------------------------------------------------------------------------------
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
-
-const TEST_OUT: u32 = 0x400_0000;
-static mut exception_count: u32 = 0;
 
 const DMA_CH0_CONT: u32 = 0x3F00_7000;
 
@@ -51,11 +38,9 @@ const DMA_CH0_CONT: u32 = 0x3F00_7000;
 fn default_exception_handler(e: &ExceptionContext) {
     let lr = e.lr;
     let uart = uart::Uart::new();
-    unsafe {
-        uart.puts("At exception handler from 0x");
-        uart.hex(lr as u32);
-        uart.puts("\n");
-    }
+    uart.puts("At exception handler from 0x");
+    uart.hex(lr as u32);
+    uart.puts("\n");
 }
 
 /// Print verbose information about the exception and the panic.
@@ -69,8 +54,8 @@ fn irq_handler(e: &ExceptionContext) {
 
         let int = crate::interrupt::Interrupt::new();
 
-        if int.IsAnyIrqPending() {
-            let pend = int.GetRawPending();
+        if int.is_any_irq_pending() {
+            let pend = int.get_raw_pending();
             uart.puts("IRQ pending: ");
             uart.hex((pend & 0xFFFF_FFFF) as u32);
             uart.puts(" ");
@@ -90,7 +75,7 @@ fn irq_handler(e: &ExceptionContext) {
                         }
                         crate::interrupt::Interrupt::INT_NO_DMA => {
                             uart.puts("Clear DMA int.\n");
-                            *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
+                            *(DMA_CH0_CONT as *mut u32) |= 0x1 << 2;
                         }
                         _ => {
                             uart.puts("Unknown int: ");
@@ -101,7 +86,7 @@ fn irq_handler(e: &ExceptionContext) {
                 }
             }
         } else {
-            let pend = int.GetRawBasicPending();
+            let pend = int.get_raw_basic_pending();
             if pend != 0 {
                 uart.puts("Basic IRQ pending: ");
                 uart.hex(pend);
@@ -112,7 +97,7 @@ fn irq_handler(e: &ExceptionContext) {
                             crate::interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER => {
                                 uart.puts("Clear Timer interrupt.\n");
                                 let t = crate::arm_timer::ArmTimer::new();
-                                t.ClearIrq();
+                                t.clear_irq();
                             }
                             _ => {
                                 uart.puts("Unknown basic int: ");
@@ -207,94 +192,6 @@ unsafe extern "C" fn lower_aarch32_serror(e: &mut ExceptionContext) {
 }
 
 //--------------------------------------------------------------------------------------------------
-// Pretty printing
-//--------------------------------------------------------------------------------------------------
-
-/// Human readable ESR_EL1.
-#[rustfmt::skip]
-impl fmt::Display for EsrEL1 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let esr_el1 = ESR_EL1.extract();
-
-        // Raw print of whole register.
-        writeln!(f, "ESR_EL1: {:#010x}", esr_el1.get())?;
-
-        // Raw print of exception class.
-        write!(f, "      Exception Class         (EC) : {:#x}", esr_el1.read(ESR_EL1::EC))?;
-
-        // Exception class, translation.
-        let ec_translation = match esr_el1.read_as_enum(ESR_EL1::EC) {
-            Some(ESR_EL1::EC::Value::DataAbortCurrentEL) => "Data Abort, current EL",
-            _ => "N/A",
-        };
-        writeln!(f, " - {}", ec_translation)?;
-
-        // Raw print of instruction specific syndrome.
-        write!(f, "      Instr Specific Syndrome (ISS): {:#x}", esr_el1.read(ESR_EL1::ISS))?;
-
-        Ok(())
-    }
-}
-
-/// Human readable SPSR_EL1.
-#[rustfmt::skip]
-impl fmt::Display for SpsrEL1 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Raw value.
-        writeln!(f, "SPSR_EL1: {:#010x}", self.0.get())?;
-
-        let to_flag_str = |x| -> _ {
-            if x { "Set" } else { "Not set" }
-         };
-
-        writeln!(f, "      Flags:")?;
-        writeln!(f, "            Negative (N): {}", to_flag_str(self.0.is_set(SPSR_EL1::N)))?;
-        writeln!(f, "            Zero     (Z): {}", to_flag_str(self.0.is_set(SPSR_EL1::Z)))?;
-        writeln!(f, "            Carry    (C): {}", to_flag_str(self.0.is_set(SPSR_EL1::C)))?;
-        writeln!(f, "            Overflow (V): {}", to_flag_str(self.0.is_set(SPSR_EL1::V)))?;
-
-        let to_mask_str = |x| -> _ {
-            if x { "Masked" } else { "Unmasked" }
-        };
-
-        writeln!(f, "      Exception handling state:")?;
-        writeln!(f, "            Debug  (D): {}", to_mask_str(self.0.is_set(SPSR_EL1::D)))?;
-        writeln!(f, "            SError (A): {}", to_mask_str(self.0.is_set(SPSR_EL1::A)))?;
-        writeln!(f, "            IRQ    (I): {}", to_mask_str(self.0.is_set(SPSR_EL1::I)))?;
-        writeln!(f, "            FIQ    (F): {}", to_mask_str(self.0.is_set(SPSR_EL1::F)))?;
-
-        write!(f, "      Illegal Execution State (IL): {}",
-            to_flag_str(self.0.is_set(SPSR_EL1::IL))
-        )?;
-
-        Ok(())
-    }
-}
-
-/// Human readable print of the exception context.
-impl fmt::Display for ExceptionContext {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "ELR_EL1: {:#018x}", self.elr_el1)?;
-        writeln!(f, "{}", self.spsr_el1)?;
-        writeln!(f)?;
-        writeln!(f, "General purpose register:")?;
-
-        #[rustfmt::skip]
-        let alternating = |x| -> _ {
-            if x % 2 == 0 { "   " } else { "\n" }
-        };
-
-        // Print two registers per line.
-        for (i, reg) in self.gpr.iter().enumerate() {
-            write!(f, "      x{: <2}: {: >#018x}{}", i, reg, alternating(i))?;
-        }
-        write!(f, "      lr : {:#018x}", self.lr)?;
-
-        Ok(())
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
 // Arch-public
 //--------------------------------------------------------------------------------------------------
 
@@ -319,6 +216,7 @@ pub unsafe fn set_vbar_el1() -> u64 {
     addr
 }
 
+#[allow(dead_code)]
 pub trait DaifField {
     fn daif_field() -> register::Field<u32, DAIF::Register>;
 }
@@ -328,34 +226,40 @@ pub struct SError;
 pub struct IRQ;
 pub struct FIQ;
 
+#[allow(dead_code)]
 impl DaifField for Debug {
     fn daif_field() -> register::Field<u32, DAIF::Register> {
         DAIF::D
     }
 }
 
+#[allow(dead_code)]
 impl DaifField for SError {
     fn daif_field() -> register::Field<u32, DAIF::Register> {
         DAIF::A
     }
 }
 
+#[allow(dead_code)]
 impl DaifField for IRQ {
     fn daif_field() -> register::Field<u32, DAIF::Register> {
         DAIF::I
     }
 }
 
+#[allow(dead_code)]
 impl DaifField for FIQ {
     fn daif_field() -> register::Field<u32, DAIF::Register> {
         DAIF::F
     }
 }
 
+#[allow(dead_code)]
 pub fn is_masked<T: DaifField>() -> bool {
     DAIF.is_set(T::daif_field())
 }
 
+#[allow(dead_code)]
 #[inline(always)]
 pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
     // Enable timer counter registers for EL1.
@@ -394,9 +298,9 @@ pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
 const GPU_INTERRUPTS_ROUTING: u32 = 0x4000000C;
 const IRQ_ENABLE1: u32 = 0x3F00B210;
 
-const CORE0_INTERRUPT_SOURCE: u32 = 0x40000060;
+// const CORE0_INTERRUPT_SOURCE: u32 = 0x40000060;
 
-pub unsafe fn SetIrqSourceToCore0() {
+pub unsafe fn set_irq_source_to_core0() {
     *(GPU_INTERRUPTS_ROUTING as *mut u32) = 0; // use core0
     *(IRQ_ENABLE1 as *mut u32) = 1 << 16;
 }

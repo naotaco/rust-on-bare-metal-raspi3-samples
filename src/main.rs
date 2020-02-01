@@ -43,7 +43,6 @@ mod uart;
 
 use nt_allocator::NtGlobalAlloc;
 extern crate alloc;
-use alloc::boxed::Box;
 
 #[global_allocator]
 static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
@@ -83,87 +82,16 @@ fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
     }
 }
 
-fn memcpy_dmac(src: u32, dest: u32, size: usize, burst: u8) {
-    let cb = dmac::ControlBlock4::new(src, dest, size as u32, burst);
-    let d4 = dmac::DMAC4::new();
-    let ch: usize = 0;
-    d4.init();
-    d4.turn_on(ch);
-    d4.exec(ch, &cb);
-    d4.wait_end(ch);
-    d4.clear(ch);
-}
-
-fn memcpy_cpu(src: u32, dest: u32, size: usize) {
-    if src < dest {
-        if src + size as u32 >= dest {
-            return;
-        }
-    } else {
-        if dest + size as u32 >= src {
-            return;
-        }
-    }
-
-    unsafe {
-        core::intrinsics::copy_nonoverlapping(src as *mut u32, dest as *mut u32, size);
-    }
-}
-
-fn print_time(uart: &uart::Uart) {
-    let timer = timer::TIMER::new();
-    uart.puts("time: ");
-    uart.hex(timer.get_counter32());
-    uart.puts("\n");
-}
-
-fn run_trans_test(
-    gpio: &gpio::GPIO,
-    uart: &uart::Uart,
-    src: u32,
-    dest: u32,
-    size: usize,
-    burst: u8,
-    use_dma: bool,
-) {
-    let timer = timer::TIMER::new();
-    let start = timer.get_counter64();
-    gpio.pin5(true);
-    //print_time(&uart);
-    //uart.puts("starting memcpy.\n");
-
-    if use_dma {
-        memcpy_dmac(src, dest, size, burst);
-    } else {
-        memcpy_cpu(src, dest, size);
-    }
-    // memcpy_cpu(src, dest, size);
-
-    gpio.pin5(false);
-    let end = timer.get_counter64();
-
-    uart.puts("done! size: 0x");
-    uart.hex(size as u32);
-    uart.puts(" burst: ");
-    uart.hex(burst as u32);
-    uart.puts(" duration: 0x");
-    uart.hex(((end - start) & 0xFFFF_FFFF) as u32);
-    uart.puts("\n");
-}
-
 fn kernel_entry() {
     unsafe {
         exception::el2_to_el1_transition(user_main as *const () as u64);
     }
 }
 
-fn some_callback(time: u32) {}
-
 fn user_main() -> ! {
     arm_debug::setup_debug();
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();
-    let gpio = gpio::GPIO::new();
 
     // set up serial console
     match uart.init(&mut mbox) {
@@ -195,7 +123,7 @@ fn user_main() -> ! {
     dump(dest, size, &uart);
 
     unsafe {
-        exception::SetIrqSourceToCore0();
+        exception::set_irq_source_to_core0();
         raspi3_boot::enable_irq();
     }
 
@@ -213,17 +141,17 @@ fn user_main() -> ! {
     // uart.hex(b);
 
     let int = interrupt::Interrupt::new();
-    int.EnableBasicIrq(interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER);
+    int.enable_basic_irq(interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER);
     // uart.puts("Enabling Irq0\n");
     // int.EnableIrq(0);
     uart.puts("Enabling Irq1\n");
-    int.EnableIrq(1);
+    int.enable_irq(1);
     // uart.puts("Enabling Irq2\n");
     // int.EnableIrq(2);
     // uart.puts("Enabling Irq3\n");
     // int.EnableIrq(3);
 
-    let timer = timer::TIMER::new_with_callback(some_callback);
+    let timer = timer::TIMER::new();
     let current = timer.get_counter32();
     let duration = 500_0000; // maybe 1sec.
     uart.puts("Starting timer\n");
@@ -238,9 +166,9 @@ fn user_main() -> ! {
     // }
 
     let arm_timer = arm_timer::ArmTimer::new();
-    arm_timer.StartFreeRun();
-    arm_timer.EnableInt();
-    arm_timer.SetCountDown(1000000);
+    arm_timer.start_free_run();
+    arm_timer.enable_int();
+    arm_timer.set_count_down(1000000);
 
     loop {}
 }

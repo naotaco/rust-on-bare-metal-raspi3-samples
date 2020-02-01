@@ -1,5 +1,3 @@
-use super::MMIO_BASE;
-use core::ops::{Deref, DerefMut};
 use register::{
     mmio::{ReadOnly, ReadWrite, WriteOnly},
     register_bitfields,
@@ -73,42 +71,43 @@ impl core::ops::Deref for ArmTimer {
     }
 }
 
+#[allow(dead_code)]
 impl ArmTimer {
     pub fn new() -> ArmTimer {
         let t = ArmTimer {};
-        t.Enable();
+        t.enable();
         t
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
     }
 
-    fn Enable(&self) {
+    fn enable(&self) {
         self.CONTROL.modify(CONTROL::ENABLED::Enabled);
     }
 
-    pub fn StartFreeRun(&self) {
+    pub fn start_free_run(&self) {
         self.CONTROL
             .modify(CONTROL::FREE_RUN::Enabled + CONTROL::BIT_WIDTH::BIT_23);
     }
 
-    pub fn ReadFreeFun(&self) -> u32 {
+    pub fn read_free_run(&self) -> u32 {
         self.FREE_RUN_COUNTER.get()
     }
 
-    pub fn SetCountDown(&self, t: u32) {
+    pub fn set_count_down(&self, t: u32) {
         self.LOAD.set(t);
     }
 
-    pub fn ReadCountDown(&self) -> u32 {
+    pub fn read_count_down(&self) -> u32 {
         self.VALUE.get()
     }
 
-    pub fn EnableInt(&self) {
+    pub fn enable_int(&self) {
         self.CONTROL.modify(CONTROL::INT_EN::Enabled);
     }
 
-    pub fn ClearIrq(&self) {
+    pub fn clear_irq(&self) {
         self.IRQ_CLEAR.set(1);
     }
 }

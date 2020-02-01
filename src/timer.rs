@@ -1,13 +1,7 @@
-#![feature(new_uninit)]
-
-use super::MMIO_BASE;
-use core::ops::{Deref, DerefMut};
 use register::{
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
+    mmio::{ReadOnly, ReadWrite},
     register_bitfields,
 };
-// extern crate alloc;
-// use alloc::boxed::Box;
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
@@ -64,6 +58,7 @@ impl core::ops::Deref for TIMER {
     }
 }
 
+#[allow(dead_code)]
 impl TIMER {
     pub fn new_with_callback(cb: Callback) -> TIMER {
         TIMER { callback: Some(cb) }
