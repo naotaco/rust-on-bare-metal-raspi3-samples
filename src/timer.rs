@@ -1,13 +1,21 @@
+#![feature(new_uninit)]
+
 use super::MMIO_BASE;
 use core::ops::{Deref, DerefMut};
 use register::{
     mmio::{ReadOnly, ReadWrite, WriteOnly},
     register_bitfields,
 };
+// extern crate alloc;
+// use alloc::boxed::Box;
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
-pub struct TIMER {}
+type Callback = fn(time: u32);
+
+pub struct TIMER {
+    callback: Option<Callback>,
+}
 
 #[allow(non_snake_case)]
 #[repr(C)]
@@ -57,9 +65,22 @@ impl core::ops::Deref for TIMER {
 }
 
 impl TIMER {
-    pub fn new() -> TIMER {
-        TIMER {}
+    pub fn new_with_callback(cb: Callback) -> TIMER {
+        TIMER { callback: Some(cb) }
     }
+
+    pub fn new() -> TIMER {
+        TIMER { callback: None }
+    }
+
+    fn tick(&self) {
+        let value: u32 = 0;
+        match self.callback {
+            Some(c) => c(value),
+            _ => {}
+        }
+    }
+
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
     }

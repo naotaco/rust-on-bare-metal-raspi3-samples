@@ -27,6 +27,7 @@
 #![no_main]
 #![feature(asm)]
 #![feature(global_asm)]
+#![feature(new_uninit)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
@@ -39,6 +40,16 @@ mod interrupt;
 mod mbox;
 mod timer;
 mod uart;
+
+use nt_allocator::NtGlobalAlloc;
+extern crate alloc;
+use alloc::boxed::Box;
+
+#[global_allocator]
+static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
+    base: 0x400_0000,
+    size: 0x200_0000,
+};
 
 fn init(data_addr: u32, size: usize, init_data: u32) {
     for i in 0..size / 4 {
@@ -146,6 +157,8 @@ fn kernel_entry() {
     }
 }
 
+fn some_callback(time: u32) {}
+
 fn user_main() -> ! {
     arm_debug::setup_debug();
     let uart = uart::Uart::new();
@@ -161,6 +174,8 @@ fn user_main() -> ! {
     }
 
     unsafe {
+        GLOBAL_ALLOCATOR.init();
+
         let addr = exception::set_vbar_el1();
         uart.puts("set vbar");
         uart.hex((addr & 0xFFFF_FFFF) as u32);
@@ -208,7 +223,7 @@ fn user_main() -> ! {
     // uart.puts("Enabling Irq3\n");
     // int.EnableIrq(3);
 
-    let timer = timer::TIMER::new();
+    let timer = timer::TIMER::new_with_callback(some_callback);
     let current = timer.get_counter32();
     let duration = 500_0000; // maybe 1sec.
     uart.puts("Starting timer\n");
