@@ -90,18 +90,8 @@ fn irq_handler(e: &ExceptionContext) {
                 uart.puts("\n");
                 for id in 0..7 {
                     if (pend & (1 << id)) != 0 {
-                        match id {
-                            crate::interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER => {
-                                uart.puts("Clear Timer interrupt.\n");
-                                let t = crate::arm_timer::ArmTimer::new();
-                                t.clear_irq();
-                            }
-                            _ => {
-                                uart.puts("Unknown basic int: ");
-                                uart.hex(id);
-                                uart.puts("\n");
-                            }
-                        }
+                        let hs: &IrqHandlers = &HANDLERS.as_ref().unwrap();
+                        (hs.basic_irq_callback)(id);
                     }
                 }
             } else {

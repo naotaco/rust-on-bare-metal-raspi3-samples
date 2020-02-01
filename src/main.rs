@@ -100,7 +100,6 @@ fn irq_callback(id: u32) {
             timer.clear_c1();
         }
         3 => {
-            uart.puts("Clearing timer C3\n");
             timer.clear_c3();
         }
         crate::interrupt::Interrupt::INT_NO_DMA => {
@@ -108,6 +107,9 @@ fn irq_callback(id: u32) {
             unsafe {
                 *(DMA_CH0_CONT as *mut u32) |= 0x1 << 2;
             }
+            let dest = 0x300_0000;
+            let size = 64;
+            dump(dest, size, &uart);
         }
         _ => {
             uart.puts("Unknown int: ");
@@ -119,11 +121,19 @@ fn irq_callback(id: u32) {
 
 fn basic_irq_callback(id: u32) {
     let uart = uart::Uart::new();
-    uart.puts("IRQ callback!!!\n");
+    uart.puts("Basic IRQ callback!!!\n");
 
     match id {
-        1 => {}
-        _ => {}
+        crate::interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER => {
+            uart.puts("Clear Timer interrupt.\n");
+            let t = crate::arm_timer::ArmTimer::new();
+            t.clear_irq();
+        }
+        _ => {
+            uart.puts("Unknown basic int: ");
+            uart.hex(id);
+            uart.puts("\n");
+        }
     }
 }
 
@@ -171,21 +181,27 @@ fn user_main() -> ! {
 
     let int = interrupt::Interrupt::new();
     int.enable_basic_irq(interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER);
-    // uart.puts("Enabling Irq0\n");
-    // int.EnableIrq(0);
     uart.puts("Enabling Irq1\n");
     int.enable_irq(1);
 
+    // timer
     let timer = timer::TIMER::new();
     let current = timer.get_counter32();
     let duration = 200_0000; // maybe 1sec.
     uart.puts("Starting timer\n");
     timer.set_c1(duration + current);
 
+    // arm timer
     let arm_timer = arm_timer::ArmTimer::new();
     arm_timer.start_free_run();
     arm_timer.enable_int();
     arm_timer.set_count_down(1000000);
+
+    // dma
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
+    let dma = dmac::DMAC4::new();
+    dma.turn_on(0);
+    dma.exec(0, &cb);
 
     loop {}
 }
