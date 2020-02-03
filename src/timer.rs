@@ -9,6 +9,7 @@ type Callback = fn(time: u32);
 
 pub struct TIMER {
     callback: Option<Callback>,
+    _some_value: u32,
 }
 
 #[allow(non_snake_case)]
@@ -58,14 +59,30 @@ impl core::ops::Deref for TIMER {
     }
 }
 
+impl crate::exception::InterruptDevice for TIMER {
+    fn on_fire(&self, id: u32) {
+        match id {
+            1 => self.clear_c1(),
+            3 => self.clear_c3(),
+            _ => {}
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl TIMER {
     pub fn new_with_callback(cb: Callback) -> TIMER {
-        TIMER { callback: Some(cb) }
+        TIMER {
+            callback: Some(cb),
+            _some_value: 0xdeadbeef,
+        }
     }
 
     pub fn new() -> TIMER {
-        TIMER { callback: None }
+        TIMER {
+            callback: None,
+            _some_value: 0xdeadbeef,
+        }
     }
 
     fn tick(&self) {

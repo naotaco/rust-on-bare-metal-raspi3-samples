@@ -28,6 +28,7 @@
 #![feature(asm)]
 #![feature(global_asm)]
 #![feature(new_uninit)]
+#![feature(const_fn)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
@@ -38,8 +39,10 @@ mod exception;
 mod gpio;
 mod interrupt;
 mod mbox;
+mod optional_cell;
 mod timer;
 mod uart;
+mod utils;
 
 use nt_allocator::NtGlobalAlloc;
 extern crate alloc;
@@ -137,6 +140,13 @@ fn basic_irq_callback(id: u32) {
     }
 }
 
+fn print(string: &str, value: u32, uart: &uart::Uart) {
+    uart.puts(string);
+    uart.puts(" : ");
+    uart.hex(value);
+    uart.puts("\n");
+}
+
 fn user_main() -> ! {
     arm_debug::setup_debug();
     let uart = uart::Uart::new();
@@ -175,33 +185,61 @@ fn user_main() -> ! {
     exception::set_irq_handlers(handlers);
 
     unsafe {
+        let timer = static_init!(timer::TIMER, timer::TIMER::new());
+        let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
+
+        let devices = static_init!([exception::IrqHandler2; 32], Default::default());
+        devices[0] = exception::IrqHandler2::new(optional_cell::OptionalCell::new(timer));
+        devices[1] = exception::IrqHandler2::new(optional_cell::OptionalCell::new(arm_timer));
+
+        print("timer", timer as *const _ as u32, &uart);
+        print("arm_timer", arm_timer as *const _ as u32, &uart);
+        print("devices", devices as *const _ as u32, &uart);
+        print("devices[0]", &devices[0] as *const _ as u32, &uart);
+        print("devices[1]", &devices[1] as *const _ as u32, &uart);
+
+        let handler_info = static_init!(
+            exception::IrqHandlersSettings,
+            exception::IrqHandlersSettings::new(devices)
+        );
+
+        print("handler_info", handler_info as *const _ as u32, &uart);
+
+        let h_addr = exception::set_irq_handlers2(handler_info);
+        if h_addr != 0 {
+            uart.puts("Successfully registerd handlers!\n");
+            print("set handler", h_addr, &uart);
+        } else {
+            uart.puts("Something wrong in handler registeration\n");
+        }
+
         exception::set_irq_source_to_core0();
         raspi3_boot::enable_irq();
+
+        let int = interrupt::Interrupt::new();
+        int.enable_basic_irq(interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER);
+        uart.puts("Enabling Irq1\n");
+        int.enable_irq(1);
+
+        // timer
+
+        let current = timer.get_counter32();
+        let duration = 200_0000; // maybe 1sec.
+        uart.puts("Starting timer\n");
+        timer.set_c1(duration + current);
+
+        // arm timer
+
+        arm_timer.start_free_run();
+        arm_timer.enable_int();
+        arm_timer.set_count_down(1000000);
     }
-
-    let int = interrupt::Interrupt::new();
-    int.enable_basic_irq(interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER);
-    uart.puts("Enabling Irq1\n");
-    int.enable_irq(1);
-
-    // timer
-    let timer = timer::TIMER::new();
-    let current = timer.get_counter32();
-    let duration = 200_0000; // maybe 1sec.
-    uart.puts("Starting timer\n");
-    timer.set_c1(duration + current);
-
-    // arm timer
-    let arm_timer = arm_timer::ArmTimer::new();
-    arm_timer.start_free_run();
-    arm_timer.enable_int();
-    arm_timer.set_count_down(1000000);
 
     // dma
     let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
     let dma = dmac::DMAC4::new();
     dma.turn_on(0);
-    dma.exec(0, &cb);
+    // dma.exec(0, &cb);
 
     loop {}
 }

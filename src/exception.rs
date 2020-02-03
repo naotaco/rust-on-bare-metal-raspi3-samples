@@ -4,6 +4,7 @@
 
 //! Exception handling.
 
+use crate::optional_cell::OptionalCell;
 use crate::uart;
 use cortex_a::{asm, barrier, regs::*};
 use register::mmio::ReadWrite;
@@ -46,6 +47,40 @@ impl IrqHandlers {
 
 static mut HANDLERS: Option<IrqHandlers> = None;
 
+pub trait InterruptDevice {
+    fn on_fire(&self, id: u32);
+}
+
+pub struct IrqHandler2 {
+    device: OptionalCell<&'static dyn InterruptDevice>,
+}
+
+impl IrqHandler2 {
+    pub fn new(d: OptionalCell<&'static dyn InterruptDevice>) -> IrqHandler2 {
+        IrqHandler2 { device: d }
+    }
+}
+
+impl Default for IrqHandler2 {
+    fn default() -> IrqHandler2 {
+        IrqHandler2 {
+            device: OptionalCell::empty(),
+        }
+    }
+}
+
+pub struct IrqHandlersSettings {
+    pub devices: &'static [IrqHandler2],
+}
+
+impl IrqHandlersSettings {
+    pub fn new(devices: &'static [IrqHandler2]) -> IrqHandlersSettings {
+        IrqHandlersSettings { devices: devices }
+    }
+}
+
+static mut DEVICES: Option<&'static IrqHandlersSettings> = None;
+
 //--------------------------------------------------------------------------------------------------
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
@@ -78,8 +113,9 @@ fn irq_handler(e: &ExceptionContext) {
             uart.puts("\n");
             for id in 0..63 {
                 if (pend & (1 << id)) != 0 {
-                    let hs: &IrqHandlers = &HANDLERS.as_ref().unwrap();
-                    (hs.irq_callback)(id);
+                    let d1 = DEVICES.unwrap().devices[0].device.take().unwrap();
+                    uart.hex(&d1 as *const _ as u32);
+                    d1.on_fire(id);
                 }
             }
         } else {
@@ -90,8 +126,27 @@ fn irq_handler(e: &ExceptionContext) {
                 uart.puts("\n");
                 for id in 0..7 {
                     if (pend & (1 << id)) != 0 {
-                        let hs: &IrqHandlers = &HANDLERS.as_ref().unwrap();
-                        (hs.basic_irq_callback)(id);
+                        //
+                        // DEVICES.unwrap().devices.into_iter().map(|d| {
+                        //     i += 1;
+                        //     uart.puts("in map: ");
+                        //     uart.hex(i);
+                        //     uart.puts("\n");
+                        //     if d.device.is_some() {
+                        //         d.device.take().unwrap().on_fire(id);
+                        //     }
+                        // });
+                        let mut i = 0;
+                        DEVICES.map(|ds| {
+                            ds.devices.into_iter().map(|dd| {
+                                uart.puts("device ");
+                                uart.hex(i);
+                                uart.hex(&dd as *const _ as u32);
+                                uart.hex(dd as *const _ as u32);
+                                uart.puts("\n");
+                                i += 1;
+                            });
+                        });
                     }
                 }
             } else {
@@ -295,5 +350,13 @@ pub unsafe fn set_irq_source_to_core0() {
 pub fn set_irq_handlers(callbacks: IrqHandlers) {
     unsafe {
         HANDLERS = Some(callbacks);
+    }
+}
+
+pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> u32 {
+    if (*DEVICES.get_or_insert(h)) as *const _ == h as *const _ {
+        (*DEVICES.get_or_insert(h)) as *const _ as u32
+    } else {
+        0
     }
 }

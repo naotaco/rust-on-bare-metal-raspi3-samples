@@ -5,7 +5,9 @@ use register::{
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0xB400;
 
-pub struct ArmTimer {}
+pub struct ArmTimer {
+    _some_value: u32,
+}
 
 #[allow(non_snake_case)]
 #[repr(C)]
@@ -71,10 +73,22 @@ impl core::ops::Deref for ArmTimer {
     }
 }
 
+const BASIC_INT_NO_ARM_TIMER: u32 = 0;
+
+impl crate::exception::InterruptDevice for ArmTimer {
+    fn on_fire(&self, id: u32) {
+        if id == BASIC_INT_NO_ARM_TIMER {
+            self.clear_irq();
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl ArmTimer {
     pub fn new() -> ArmTimer {
-        let t = ArmTimer {};
+        let t = ArmTimer {
+            _some_value: 0x1234aaaa,
+        };
         t.enable();
         t
     }
