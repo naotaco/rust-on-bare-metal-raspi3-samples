@@ -201,34 +201,10 @@ fn user_main() -> ! {
 
         arm_timer.enable();
 
-        print("timer", timer as *const _ as u32, &uart);
-        print(
-            "timer size",
-            core::mem::size_of::<timer::TIMER>() as u32,
-            &uart,
-        );
-        print("arm_timer", arm_timer as *const _ as u32, &uart);
-        print(
-            "arm_timer size",
-            core::mem::size_of::<arm_timer::ArmTimer>() as u32,
-            &uart,
-        );
-        print("devices", devices as *const _ as u32, &uart);
-        print("devices[0]", &((*devices)[0]) as *const _ as u32, &uart);
-        print("devices[1]", &((*devices)[1]) as *const _ as u32, &uart);
-
-        print(
-            "irqHandler size",
-            core::mem::size_of::<exception::IrqHandler2>() as u32,
-            &uart,
-        );
-
         let handler_info = static_init!(
             exception::IrqHandlersSettings,
             exception::IrqHandlersSettings::new(devices)
         );
-
-        print("handler_info", handler_info as *const _ as u32, &uart);
 
         let register_result = exception::set_irq_handlers2(handler_info);
         if register_result {
