@@ -32,23 +32,23 @@ pub trait InterruptDevice {
     fn on_fire(&self, id: u32);
 }
 
-pub struct IrqHandler2 {
+pub struct IrqHandler {
     device: OptionalCell<&'static dyn InterruptDevice>,
     _some_value: u32,
 }
 
-impl IrqHandler2 {
-    pub fn new(device: OptionalCell<&'static dyn InterruptDevice>, some_value: u32) -> IrqHandler2 {
-        IrqHandler2 {
+impl IrqHandler {
+    pub fn new(device: OptionalCell<&'static dyn InterruptDevice>, some_value: u32) -> IrqHandler {
+        IrqHandler {
             device,
             _some_value: some_value,
         }
     }
 }
 
-impl Default for IrqHandler2 {
-    fn default() -> IrqHandler2 {
-        IrqHandler2 {
+impl Default for IrqHandler {
+    fn default() -> IrqHandler {
+        IrqHandler {
             device: OptionalCell::empty(),
             _some_value: 0x00001234,
         }
@@ -56,11 +56,11 @@ impl Default for IrqHandler2 {
 }
 
 pub struct IrqHandlersSettings {
-    pub devices: &'static [IrqHandler2],
+    pub devices: &'static [IrqHandler],
 }
 
 impl IrqHandlersSettings {
-    pub fn new(devices: &'static [IrqHandler2]) -> IrqHandlersSettings {
+    pub fn new(devices: &'static [IrqHandler]) -> IrqHandlersSettings {
         IrqHandlersSettings { devices: devices }
     }
 }

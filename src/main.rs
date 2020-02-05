@@ -132,13 +132,10 @@ fn user_main() -> ! {
         let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
 
         let devices = static_init!(
-            [exception::IrqHandler2; 2],
+            [exception::IrqHandler; 2],
             [
-                exception::IrqHandler2::new(optional_cell::OptionalCell::new(timer), 0x00001111),
-                exception::IrqHandler2::new(
-                    optional_cell::OptionalCell::new(arm_timer),
-                    0x00002222
-                )
+                exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), 0x00001111),
+                exception::IrqHandler::new(optional_cell::OptionalCell::new(arm_timer), 0x00002222)
             ]
         );
 
