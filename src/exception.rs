@@ -53,11 +53,15 @@ pub trait InterruptDevice {
 
 pub struct IrqHandler2 {
     device: OptionalCell<&'static dyn InterruptDevice>,
+    _some_value: u32,
 }
 
 impl IrqHandler2 {
-    pub fn new(d: OptionalCell<&'static dyn InterruptDevice>) -> IrqHandler2 {
-        IrqHandler2 { device: d }
+    pub fn new(device: OptionalCell<&'static dyn InterruptDevice>, some_value: u32) -> IrqHandler2 {
+        IrqHandler2 {
+            device,
+            _some_value: some_value,
+        }
     }
 }
 
@@ -65,6 +69,7 @@ impl Default for IrqHandler2 {
     fn default() -> IrqHandler2 {
         IrqHandler2 {
             device: OptionalCell::empty(),
+            _some_value: 0x00001234,
         }
     }
 }
@@ -113,9 +118,7 @@ fn irq_handler(e: &ExceptionContext) {
             uart.puts("\n");
             for id in 0..63 {
                 if (pend & (1 << id)) != 0 {
-                    let d1 = DEVICES.unwrap().devices[0].device.take().unwrap();
-                    uart.hex(&d1 as *const _ as u32);
-                    d1.on_fire(id);
+                    DEVICES.unwrap().devices[0].device.map(|d| d.on_fire(id));
                 }
             }
         } else {
@@ -126,27 +129,7 @@ fn irq_handler(e: &ExceptionContext) {
                 uart.puts("\n");
                 for id in 0..7 {
                     if (pend & (1 << id)) != 0 {
-                        //
-                        // DEVICES.unwrap().devices.into_iter().map(|d| {
-                        //     i += 1;
-                        //     uart.puts("in map: ");
-                        //     uart.hex(i);
-                        //     uart.puts("\n");
-                        //     if d.device.is_some() {
-                        //         d.device.take().unwrap().on_fire(id);
-                        //     }
-                        // });
-                        let mut i = 0;
-                        DEVICES.map(|ds| {
-                            ds.devices.into_iter().map(|dd| {
-                                uart.puts("device ");
-                                uart.hex(i);
-                                uart.hex(&dd as *const _ as u32);
-                                uart.hex(dd as *const _ as u32);
-                                uart.puts("\n");
-                                i += 1;
-                            });
-                        });
+                        DEVICES.unwrap().devices[1].device.map(|d| d.on_fire(id));
                     }
                 }
             } else {
@@ -353,10 +336,6 @@ pub fn set_irq_handlers(callbacks: IrqHandlers) {
     }
 }
 
-pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> u32 {
-    if (*DEVICES.get_or_insert(h)) as *const _ == h as *const _ {
-        (*DEVICES.get_or_insert(h)) as *const _ as u32
-    } else {
-        0
-    }
+pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> bool {
+    (*DEVICES.get_or_insert(h)) as *const _ == h
 }

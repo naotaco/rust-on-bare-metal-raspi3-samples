@@ -86,17 +86,15 @@ impl crate::exception::InterruptDevice for ArmTimer {
 #[allow(dead_code)]
 impl ArmTimer {
     pub fn new() -> ArmTimer {
-        let t = ArmTimer {
+        ArmTimer {
             _some_value: 0x1234aaaa,
-        };
-        t.enable();
-        t
+        }
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
     }
 
-    fn enable(&self) {
+    pub fn enable(&self) {
         self.CONTROL.modify(CONTROL::ENABLED::Enabled);
     }
 

@@ -188,15 +188,40 @@ fn user_main() -> ! {
         let timer = static_init!(timer::TIMER, timer::TIMER::new());
         let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
 
-        let devices = static_init!([exception::IrqHandler2; 32], Default::default());
-        devices[0] = exception::IrqHandler2::new(optional_cell::OptionalCell::new(timer));
-        devices[1] = exception::IrqHandler2::new(optional_cell::OptionalCell::new(arm_timer));
+        let devices = static_init!(
+            [exception::IrqHandler2; 2],
+            [
+                exception::IrqHandler2::new(optional_cell::OptionalCell::new(timer), 0x00001111),
+                exception::IrqHandler2::new(
+                    optional_cell::OptionalCell::new(arm_timer),
+                    0x00002222
+                )
+            ]
+        );
+
+        arm_timer.enable();
 
         print("timer", timer as *const _ as u32, &uart);
+        print(
+            "timer size",
+            core::mem::size_of::<timer::TIMER>() as u32,
+            &uart,
+        );
         print("arm_timer", arm_timer as *const _ as u32, &uart);
+        print(
+            "arm_timer size",
+            core::mem::size_of::<arm_timer::ArmTimer>() as u32,
+            &uart,
+        );
         print("devices", devices as *const _ as u32, &uart);
-        print("devices[0]", &devices[0] as *const _ as u32, &uart);
-        print("devices[1]", &devices[1] as *const _ as u32, &uart);
+        print("devices[0]", &((*devices)[0]) as *const _ as u32, &uart);
+        print("devices[1]", &((*devices)[1]) as *const _ as u32, &uart);
+
+        print(
+            "irqHandler size",
+            core::mem::size_of::<exception::IrqHandler2>() as u32,
+            &uart,
+        );
 
         let handler_info = static_init!(
             exception::IrqHandlersSettings,
@@ -205,10 +230,9 @@ fn user_main() -> ! {
 
         print("handler_info", handler_info as *const _ as u32, &uart);
 
-        let h_addr = exception::set_irq_handlers2(handler_info);
-        if h_addr != 0 {
+        let register_result = exception::set_irq_handlers2(handler_info);
+        if register_result {
             uart.puts("Successfully registerd handlers!\n");
-            print("set handler", h_addr, &uart);
         } else {
             uart.puts("Something wrong in handler registeration\n");
         }
