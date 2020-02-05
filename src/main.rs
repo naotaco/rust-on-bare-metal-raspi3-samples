@@ -91,62 +91,6 @@ fn kernel_entry() {
     }
 }
 
-const DMA_CH0_CONT: u32 = 0x3F00_7000;
-
-fn irq_callback(id: u32) {
-    let uart = uart::Uart::new();
-    let timer = timer::TIMER::new();
-    uart.puts("IRQ callback!!!\n");
-
-    match id {
-        1 => {
-            timer.clear_c1();
-        }
-        3 => {
-            timer.clear_c3();
-        }
-        crate::interrupt::Interrupt::INT_NO_DMA => {
-            uart.puts("Clear DMA int.\n");
-            unsafe {
-                *(DMA_CH0_CONT as *mut u32) |= 0x1 << 2;
-            }
-            let dest = 0x300_0000;
-            let size = 64;
-            dump(dest, size, &uart);
-        }
-        _ => {
-            uart.puts("Unknown int: ");
-            uart.hex(id);
-            uart.puts("\n");
-        }
-    }
-}
-
-fn basic_irq_callback(id: u32) {
-    let uart = uart::Uart::new();
-    uart.puts("Basic IRQ callback!!!\n");
-
-    match id {
-        crate::interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER => {
-            uart.puts("Clear Timer interrupt.\n");
-            let t = crate::arm_timer::ArmTimer::new();
-            t.clear_irq();
-        }
-        _ => {
-            uart.puts("Unknown basic int: ");
-            uart.hex(id);
-            uart.puts("\n");
-        }
-    }
-}
-
-fn print(string: &str, value: u32, uart: &uart::Uart) {
-    uart.puts(string);
-    uart.puts(" : ");
-    uart.hex(value);
-    uart.puts("\n");
-}
-
 fn user_main() -> ! {
     arm_debug::setup_debug();
 
@@ -183,9 +127,6 @@ fn user_main() -> ! {
 
         dump(src, size, &uart);
         dump(dest, size, &uart);
-
-        let handlers = exception::IrqHandlers::new(irq_callback, basic_irq_callback);
-        exception::set_irq_handlers(handlers);
 
         let timer = static_init!(timer::TIMER, timer::TIMER::new());
         let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());

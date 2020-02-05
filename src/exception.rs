@@ -5,7 +5,6 @@
 //! Exception handling.
 
 use crate::optional_cell::OptionalCell;
-use crate::uart;
 use cortex_a::{asm, barrier, regs::*};
 use register::mmio::ReadWrite;
 
@@ -28,24 +27,6 @@ struct ExceptionContext {
     // Saved program status.
     spsr_el1: SpsrEL1,
 }
-
-type Callback = fn(id: u32);
-
-pub struct IrqHandlers {
-    irq_callback: Callback,
-    basic_irq_callback: Callback,
-}
-
-impl IrqHandlers {
-    pub fn new(irq: Callback, basic_irq: Callback) -> IrqHandlers {
-        IrqHandlers {
-            irq_callback: irq,
-            basic_irq_callback: basic_irq,
-        }
-    }
-}
-
-static mut HANDLERS: Option<IrqHandlers> = None;
 
 pub trait InterruptDevice {
     fn on_fire(&self, id: u32);
@@ -106,40 +87,40 @@ static mut DEBUG_CONTEXT: Option<&'static DebugContext> = None;
 //--------------------------------------------------------------------------------------------------
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
+unsafe fn puts(s: &str) {
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(s));
+}
+
+unsafe fn hex(v: u32) {
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.hex(v));
+}
 
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
     let lr = e.lr;
-    let uart = uart::Uart::new();
-    uart.puts("At exception handler from 0x");
-    uart.hex(lr as u32);
-    uart.puts("\n");
+    unsafe {
+        puts("At exception handler from 0x");
+        hex(lr as u32);
+        puts("\n");
+    }
 }
 
 /// Print verbose information about the exception and the panic.
 fn irq_handler(e: &ExceptionContext) {
-    let uart = uart::Uart::new();
     unsafe {
-        uart.puts("IRQ handler from 0x");
-        uart.hex(e.elr_el1 as u32);
-        uart.puts("\n");
-
-        unsafe {
-            DEBUG_CONTEXT
-                .unwrap()
-                .callback
-                .map(|c| c.puts("Print via callback\n"));
-        }
+        puts("IRQ handler from 0x");
+        hex(e.elr_el1 as u32);
+        puts("\n");
 
         let int = crate::interrupt::Interrupt::new();
 
         if int.is_any_irq_pending() {
             let pend = int.get_raw_pending();
-            uart.puts("IRQ pending: ");
-            uart.hex((pend & 0xFFFF_FFFF) as u32);
-            uart.puts(" ");
-            uart.hex(((pend >> 32) & 0xFFFF_FFFF) as u32);
-            uart.puts("\n");
+            puts("IRQ pending: ");
+            hex((pend & 0xFFFF_FFFF) as u32);
+            puts(" ");
+            hex(((pend >> 32) & 0xFFFF_FFFF) as u32);
+            puts("\n");
             for id in 0..63 {
                 if (pend & (1 << id)) != 0 {
                     DEVICES.unwrap().devices[0].device.map(|d| d.on_fire(id));
@@ -148,16 +129,16 @@ fn irq_handler(e: &ExceptionContext) {
         } else {
             let pend = int.get_raw_basic_pending();
             if pend != 0 {
-                uart.puts("Basic IRQ pending: ");
-                uart.hex(pend);
-                uart.puts("\n");
+                puts("Basic IRQ pending: ");
+                hex(pend);
+                puts("\n");
                 for id in 0..7 {
                     if (pend & (1 << id)) != 0 {
                         DEVICES.unwrap().devices[1].device.map(|d| d.on_fire(id));
                     }
                 }
             } else {
-                uart.puts("Some unknown case...\n");
+                puts("Some unknown case...\n");
             }
         }
     }
@@ -352,12 +333,6 @@ const IRQ_ENABLE1: u32 = 0x3F00B210;
 pub unsafe fn set_irq_source_to_core0() {
     *(GPU_INTERRUPTS_ROUTING as *mut u32) = 0; // use core0
     *(IRQ_ENABLE1 as *mut u32) = 1 << 16;
-}
-
-pub fn set_irq_handlers(callbacks: IrqHandlers) {
-    unsafe {
-        HANDLERS = Some(callbacks);
-    }
 }
 
 pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> bool {
