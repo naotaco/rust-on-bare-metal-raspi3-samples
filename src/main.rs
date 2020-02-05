@@ -149,42 +149,44 @@ fn print(string: &str, value: u32, uart: &uart::Uart) {
 
 fn user_main() -> ! {
     arm_debug::setup_debug();
-    let uart = uart::Uart::new();
-    let mut mbox = mbox::Mbox::new();
-
-    // set up serial console
-    match uart.init(&mut mbox) {
-        Ok(_) => uart.puts("\n[0] UART is live!\n"),
-        Err(_) => loop {
-            unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
-        },
-    }
 
     unsafe {
-        GLOBAL_ALLOCATOR.init();
+        //let uart = uart::Uart::new();
+        let uart = static_init!(uart::Uart, uart::Uart::new());
+        let mut mbox = mbox::Mbox::new();
 
-        let addr = exception::set_vbar_el1();
-        uart.puts("set vbar");
-        uart.hex((addr & 0xFFFF_FFFF) as u32);
-    }
+        // set up serial console
+        match uart.init(&mut mbox) {
+            Ok(_) => uart.puts("\n[0] UART is live!\n"),
+            Err(_) => loop {
+                unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
+            },
+        }
 
-    // Section 2.4, 2.5
-    let src = 0x200_0000;
-    let dest = 0x300_0000;
-    let size = 64;
+        unsafe {
+            GLOBAL_ALLOCATOR.init();
 
-    uart.puts("Initializing...\n");
+            let addr = exception::set_vbar_el1();
+            uart.puts("set vbar");
+            uart.hex((addr & 0xFFFF_FFFF) as u32);
+        }
 
-    init(src, size, 0xFF00_0000);
-    init(dest, size, 0x1200_0000);
+        // Section 2.4, 2.5
+        let src = 0x200_0000;
+        let dest = 0x300_0000;
+        let size = 64;
 
-    dump(src, size, &uart);
-    dump(dest, size, &uart);
+        uart.puts("Initializing...\n");
 
-    let handlers = exception::IrqHandlers::new(irq_callback, basic_irq_callback);
-    exception::set_irq_handlers(handlers);
+        init(src, size, 0xFF00_0000);
+        init(dest, size, 0x1200_0000);
 
-    unsafe {
+        dump(src, size, &uart);
+        dump(dest, size, &uart);
+
+        let handlers = exception::IrqHandlers::new(irq_callback, basic_irq_callback);
+        exception::set_irq_handlers(handlers);
+
         let timer = static_init!(timer::TIMER, timer::TIMER::new());
         let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
 
@@ -207,7 +209,14 @@ fn user_main() -> ! {
         );
 
         let register_result = exception::set_irq_handlers2(handler_info);
-        if register_result {
+
+        let debug_context = static_init!(
+            exception::DebugContext,
+            exception::DebugContext::new(optional_cell::OptionalCell::new(uart))
+        );
+
+        let register_result_uart = exception::set_debug_context(debug_context);
+        if register_result && register_result_uart {
             uart.puts("Successfully registerd handlers!\n");
         } else {
             uart.puts("Something wrong in handler registeration\n");
@@ -233,13 +242,13 @@ fn user_main() -> ! {
         arm_timer.start_free_run();
         arm_timer.enable_int();
         arm_timer.set_count_down(1000000);
-    }
 
-    // dma
-    let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
-    let dma = dmac::DMAC4::new();
-    dma.turn_on(0);
-    // dma.exec(0, &cb);
+        // dma
+        let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
+        let dma = dmac::DMAC4::new();
+        dma.turn_on(0);
+        // dma.exec(0, &cb);
+    }
 
     loop {}
 }

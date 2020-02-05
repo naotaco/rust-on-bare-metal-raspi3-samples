@@ -150,6 +150,16 @@ impl ops::Deref for Uart {
     }
 }
 
+impl crate::exception::ConsoleOut for Uart {
+    fn puts(&self, s: &str) {
+        self.puts(s);
+    }
+
+    fn hex(&self, v: u32) {
+        self.hex(v)
+    }
+}
+
 impl Uart {
     pub fn new() -> Uart {
         Uart

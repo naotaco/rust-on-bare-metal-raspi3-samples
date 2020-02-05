@@ -86,6 +86,23 @@ impl IrqHandlersSettings {
 
 static mut DEVICES: Option<&'static IrqHandlersSettings> = None;
 
+pub trait ConsoleOut {
+    fn puts(&self, s: &str);
+    fn hex(&self, h: u32);
+}
+
+pub struct DebugContext {
+    callback: OptionalCell<&'static dyn ConsoleOut>,
+}
+
+impl DebugContext {
+    pub fn new(callback: OptionalCell<&'static dyn ConsoleOut>) -> DebugContext {
+        DebugContext { callback }
+    }
+}
+
+static mut DEBUG_CONTEXT: Option<&'static DebugContext> = None;
+
 //--------------------------------------------------------------------------------------------------
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
@@ -106,6 +123,13 @@ fn irq_handler(e: &ExceptionContext) {
         uart.puts("IRQ handler from 0x");
         uart.hex(e.elr_el1 as u32);
         uart.puts("\n");
+
+        unsafe {
+            DEBUG_CONTEXT
+                .unwrap()
+                .callback
+                .map(|c| c.puts("Print via callback\n"));
+        }
 
         let int = crate::interrupt::Interrupt::new();
 
@@ -338,4 +362,8 @@ pub fn set_irq_handlers(callbacks: IrqHandlers) {
 
 pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> bool {
     (*DEVICES.get_or_insert(h)) as *const _ == h
+}
+
+pub unsafe fn set_debug_context(c: &'static DebugContext) -> bool {
+    (*DEBUG_CONTEXT.get_or_insert(c)) as *const _ == c
 }
