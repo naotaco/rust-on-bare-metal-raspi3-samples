@@ -336,18 +336,6 @@ pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
     asm::eret()
 }
 
-// https://qiita.com/eggman/items/fd7b2907da71e65b8580
-
-const GPU_INTERRUPTS_ROUTING: u32 = 0x4000000C;
-const IRQ_ENABLE1: u32 = 0x3F00B210;
-
-// const CORE0_INTERRUPT_SOURCE: u32 = 0x40000060;
-
-pub unsafe fn set_irq_source_to_core0() {
-    *(GPU_INTERRUPTS_ROUTING as *mut u32) = 0; // use core0
-    *(IRQ_ENABLE1 as *mut u32) = 1 << 16;
-}
-
 pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> bool {
     (*DEVICES.get_or_insert(h)) as *const _ == h
 }

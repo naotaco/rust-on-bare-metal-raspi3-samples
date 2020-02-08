@@ -128,52 +128,25 @@ fn user_main() -> ! {
         dump(src, size, &uart);
         dump(dest, size, &uart);
 
+        // create static instances of drivers.
         let timer = static_init!(timer::TIMER, timer::TIMER::new());
         let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
+        let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
 
-        let irq_devices = static_init!(
-            [exception::IrqHandler; 1],
-            [exception::IrqHandler::new(
-                optional_cell::OptionalCell::new(timer),
-                0x00001111
-            ),]
-        );
+        // setup irq handlers with drivers that have capability of irq handling.
+        setup_irq_handlers(timer, arm_timer, dma, uart);
 
-        let basic_irq_devices = static_init!(
-            [exception::IrqHandler; 1],
-            [exception::IrqHandler::new(
-                optional_cell::OptionalCell::new(arm_timer),
-                0x00002222
-            )]
-        );
-
-        let handler_info = static_init!(
-            exception::IrqHandlersSettings,
-            exception::IrqHandlersSettings::new(irq_devices, basic_irq_devices)
-        );
-
-        let register_result = exception::set_irq_handlers2(handler_info);
-
-        let debug_context = static_init!(
-            exception::DebugContext,
-            exception::DebugContext::new(optional_cell::OptionalCell::new(uart))
-        );
-
-        let register_result_uart = exception::set_debug_context(debug_context);
-        if register_result && register_result_uart {
-            uart.puts("Successfully registerd handlers!\n");
-        } else {
-            uart.puts("Something wrong in handler registeration\n");
-        }
+        // enable receiving irq at CPU
         raspi3_boot::enable_irq();
 
+        // enable interrupt handling at int controller.
         let int = interrupt::Interrupt::new();
-        int.enable_basic_irq(interrupt::Interrupt::BASIC_INT_NO_ARM_TIMER);
+        int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
         uart.puts("Enabling Irq1\n");
-        int.enable_irq(1);
+        int.enable_irq(interrupt::InterruptId::TIMER1);
+        int.enable_irq(interrupt::InterruptId::DMA);
 
         // timer
-
         let current = timer.get_counter32();
         let duration = 200_0000; // maybe 1sec.
         uart.puts("Starting timer\n");
@@ -187,12 +160,52 @@ fn user_main() -> ! {
 
         // dma
         let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
-        let dma = dmac::DMAC4::new();
         dma.turn_on(0);
-        // dma.exec(0, &cb);
+        dma.exec(0, &cb);
     }
 
     loop {}
 }
 
+unsafe fn setup_irq_handlers(
+    timer: &'static timer::TIMER,
+    arm_timer: &'static arm_timer::ArmTimer,
+    dma: &'static dmac::DMAC4,
+    uart: &'static uart::Uart,
+) {
+    let irq_devices = static_init!(
+        [exception::IrqHandler; 2],
+        [
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), 0x00001111),
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), 0x1112)
+        ]
+    );
+
+    let basic_irq_devices = static_init!(
+        [exception::IrqHandler; 1],
+        [exception::IrqHandler::new(
+            optional_cell::OptionalCell::new(arm_timer),
+            0x00002222
+        )]
+    );
+
+    let handler_info = static_init!(
+        exception::IrqHandlersSettings,
+        exception::IrqHandlersSettings::new(irq_devices, basic_irq_devices)
+    );
+
+    let register_result = exception::set_irq_handlers2(handler_info);
+
+    let debug_context = static_init!(
+        exception::DebugContext,
+        exception::DebugContext::new(optional_cell::OptionalCell::new(uart))
+    );
+
+    let register_result_uart = exception::set_debug_context(debug_context);
+    if register_result && register_result_uart {
+        uart.puts("Successfully registerd handlers!\n");
+    } else {
+        uart.puts("Something wrong in handler registeration\n");
+    }
+}
 raspi3_boot::entry!(kernel_entry);

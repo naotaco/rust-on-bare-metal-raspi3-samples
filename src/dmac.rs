@@ -223,22 +223,7 @@ register_bitfields! {
     ],
     GLOBAL_INT[
         // 31-16: reserved.
-        INT15 OFFSET(15) NUMBITS(1) [],
-        INT14 OFFSET(14) NUMBITS(1) [],
-        INT13 OFFSET(13) NUMBITS(1) [],
-        INT12 OFFSET(12) NUMBITS(1) [],
-        INT11 OFFSET(11) NUMBITS(1) [],
-        INT10 OFFSET(10) NUMBITS(1) [],
-        INT9 OFFSET(9) NUMBITS(1) [],
-        INT8 OFFSET(8) NUMBITS(1) [],
-        INT7 OFFSET(7) NUMBITS(1) [],
-        INT6 OFFSET(6) NUMBITS(1) [],
-        INT5 OFFSET(5) NUMBITS(1) [],
-        INT4 OFFSET(4) NUMBITS(1) [],
-        INT3 OFFSET(3) NUMBITS(1) [],
-        INT2 OFFSET(2) NUMBITS(1) [],
-        INT1 OFFSET(1) NUMBITS(1) [],
-        INT0 OFFSET(0) NUMBITS(1) []
+        STATUS OFFSET(0) NUMBITS(16)[]
     ],
     GLOBAL_ENABLE[
         ENABLE15 OFFSET(15) NUMBITS(1) [
@@ -600,6 +585,18 @@ impl core::ops::Deref for DMAC4 {
 
 pub struct DMAC4 {}
 
+impl crate::exception::InterruptDevice for DMAC4 {
+    fn on_fire(&self, id: u32) {
+        if id == 16 {
+            for ch in 0..=15 {
+                if self.is_interrupt_pending(ch) {
+                    self.clear_interrupt(ch);
+                }
+            }
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl DMAC4 {
     pub fn new() -> DMAC4 {
@@ -704,5 +701,20 @@ impl DMAC4 {
             return;
         }
         self.Channels[ch].CS.write(CS::END::Clear);
+    }
+
+    pub fn clear_interrupt(&self, ch: usize) {
+        if ch > 15 {
+            return;
+        }
+        self.Channels[ch].CS.write(CS::INT::Clear);
+    }
+
+    pub fn is_interrupt_pending(&self, ch: usize) -> bool {
+        if ch > 15 {
+            return false;
+        }
+
+        self.INT_STATUS.read(GLOBAL_INT::STATUS) & (1 << ch as u32) != 0
     }
 }

@@ -5,6 +5,18 @@ use register::{
 
 const INTC_BASE: u32 = super::MMIO_BASE + 0xB200;
 
+pub struct InterruptId {}
+impl InterruptId {
+    pub const DMA: u32 = 16;
+    pub const TIMER1: u32 = 1;
+    pub const TIMER3: u32 = 1;
+}
+
+pub struct BasicInterruptId {}
+impl BasicInterruptId {
+    pub const ARM_TIMER: u32 = 0;
+}
+
 pub struct Interrupt {}
 
 #[allow(non_snake_case)]
@@ -68,9 +80,6 @@ impl core::ops::Deref for Interrupt {
 
 #[allow(dead_code)]
 impl Interrupt {
-    pub const INT_NO_DMA: u32 = 16;
-    pub const BASIC_INT_NO_ARM_TIMER: u32 = 0;
-
     pub fn new() -> Interrupt {
         Interrupt {}
     }
