@@ -75,8 +75,7 @@ extern "C" {
     fn _enable_irq();
 }
 
-/// Something here.
+/// Enable irq at CPU.
 pub unsafe fn enable_irq() {
-    // _enable_irq();
     asm!("msr daifclr, #2");
 }

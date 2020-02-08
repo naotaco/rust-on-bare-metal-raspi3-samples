@@ -131,19 +131,25 @@ fn user_main() -> ! {
         let timer = static_init!(timer::TIMER, timer::TIMER::new());
         let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
 
-        let devices = static_init!(
-            [exception::IrqHandler; 2],
-            [
-                exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), 0x00001111),
-                exception::IrqHandler::new(optional_cell::OptionalCell::new(arm_timer), 0x00002222)
-            ]
+        let irq_devices = static_init!(
+            [exception::IrqHandler; 1],
+            [exception::IrqHandler::new(
+                optional_cell::OptionalCell::new(timer),
+                0x00001111
+            ),]
         );
 
-        arm_timer.enable();
+        let basic_irq_devices = static_init!(
+            [exception::IrqHandler; 1],
+            [exception::IrqHandler::new(
+                optional_cell::OptionalCell::new(arm_timer),
+                0x00002222
+            )]
+        );
 
         let handler_info = static_init!(
             exception::IrqHandlersSettings,
-            exception::IrqHandlersSettings::new(devices)
+            exception::IrqHandlersSettings::new(irq_devices, basic_irq_devices)
         );
 
         let register_result = exception::set_irq_handlers2(handler_info);
@@ -159,8 +165,6 @@ fn user_main() -> ! {
         } else {
             uart.puts("Something wrong in handler registeration\n");
         }
-
-        exception::set_irq_source_to_core0();
         raspi3_boot::enable_irq();
 
         let int = interrupt::Interrupt::new();
@@ -176,7 +180,7 @@ fn user_main() -> ! {
         timer.set_c1(duration + current);
 
         // arm timer
-
+        arm_timer.enable();
         arm_timer.start_free_run();
         arm_timer.enable_int();
         arm_timer.set_count_down(1000000);

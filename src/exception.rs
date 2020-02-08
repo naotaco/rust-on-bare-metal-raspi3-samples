@@ -56,12 +56,19 @@ impl Default for IrqHandler {
 }
 
 pub struct IrqHandlersSettings {
-    pub devices: &'static [IrqHandler],
+    pub irq_devices: &'static [IrqHandler],
+    pub basic_irq_devices: &'static [IrqHandler],
 }
 
 impl IrqHandlersSettings {
-    pub fn new(devices: &'static [IrqHandler]) -> IrqHandlersSettings {
-        IrqHandlersSettings { devices: devices }
+    pub fn new(
+        irq_devices: &'static [IrqHandler],
+        basic_irq_devices: &'static [IrqHandler],
+    ) -> IrqHandlersSettings {
+        IrqHandlersSettings {
+            irq_devices,
+            basic_irq_devices,
+        }
     }
 }
 
@@ -123,7 +130,10 @@ fn irq_handler(e: &ExceptionContext) {
             puts("\n");
             for id in 0..63 {
                 if (pend & (1 << id)) != 0 {
-                    DEVICES.unwrap().devices[0].device.map(|d| d.on_fire(id));
+                    let devs = DEVICES.unwrap().irq_devices;
+                    for d in devs.iter() {
+                        d.device.map(|d| d.on_fire(id));
+                    }
                 }
             }
         } else {
@@ -134,7 +144,10 @@ fn irq_handler(e: &ExceptionContext) {
                 puts("\n");
                 for id in 0..7 {
                     if (pend & (1 << id)) != 0 {
-                        DEVICES.unwrap().devices[1].device.map(|d| d.on_fire(id));
+                        let devs = DEVICES.unwrap().basic_irq_devices;
+                        for d in devs.iter() {
+                            d.device.map(|d| d.on_fire(id));
+                        }
                     }
                 }
             } else {
