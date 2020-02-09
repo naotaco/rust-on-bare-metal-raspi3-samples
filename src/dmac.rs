@@ -587,11 +587,9 @@ pub struct DMAC4 {}
 
 impl crate::exception::InterruptDevice for DMAC4 {
     fn on_fire(&self, id: u32) {
-        if id == 16 {
-            for ch in 0..=15 {
-                if self.is_interrupt_pending(ch) {
-                    self.clear_interrupt(ch);
-                }
+        for ch in 0..=15 {
+            if self.is_interrupt_pending(ch) {
+                self.clear_interrupt(ch);
             }
         }
     }

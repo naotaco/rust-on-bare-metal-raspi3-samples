@@ -128,7 +128,17 @@ fn user_main() -> ! {
         dump(dest, size, &uart);
 
         // create static instances of drivers.
-        let timer = static_init!(timer::TIMER, timer::TIMER::new());
+        let timer_flags = static_init!(
+            [optional_cell::OptionalCell<bool>; 4],
+            [
+                optional_cell::OptionalCell::empty(),
+                optional_cell::OptionalCell::empty(),
+                optional_cell::OptionalCell::empty(),
+                optional_cell::OptionalCell::empty()
+            ]
+        );
+
+        let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
         let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
         let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
 
@@ -161,9 +171,16 @@ fn user_main() -> ! {
         let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
         dma.turn_on(0);
         dma.exec(0, &cb);
-    }
 
-    loop {}
+        loop {
+            if timer.has_fired(1) {
+                uart.puts("Timer fired ch1\n");
+                let current = timer.get_counter32();
+                let duration = 200_0000; // maybe 1sec.
+                timer.set(1, duration + current);
+            }
+        }
+    }
 }
 
 unsafe fn setup_irq_handlers(

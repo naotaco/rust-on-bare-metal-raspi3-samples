@@ -1,3 +1,4 @@
+use crate::optional_cell::OptionalCell;
 use register::{
     mmio::{ReadOnly, ReadWrite},
     register_bitfields,
@@ -9,7 +10,7 @@ type Callback = fn(time: u32, ch: u32);
 
 pub struct TIMER {
     callback: Option<Callback>,
-    fired: [bool; 4],
+    fired: &'static [OptionalCell<bool>; 4],
 }
 
 #[allow(non_snake_case)]
@@ -61,13 +62,22 @@ impl core::ops::Deref for TIMER {
 
 impl crate::exception::InterruptDevice for TIMER {
     fn on_fire(&self, id: u32) {
-        match id {
-            0 | 1 | 2 | 3 => {
-                // valid channnels
-                self.clear(id);
-                // self.fired[id as usize] = true;
+        // match id {
+        //     0 | 1 | 2 | 3 => {
+
+        //         // valid channnels
+        //         self.clear(1);
+        //         // self.fired[id as usize] = true;
+        //         self.fired.insert(Some(&[true; 4]));
+        //     }
+        //     _ => {}
+        // }
+
+        for ch in 0..=3 {
+            if self.is_match(ch) {
+                self.clear(ch);
+                self.fired[ch as usize].insert(Some(true));
             }
-            _ => {}
         }
 
         match self.callback {
@@ -81,17 +91,10 @@ impl crate::exception::InterruptDevice for TIMER {
 
 #[allow(dead_code)]
 impl TIMER {
-    pub fn new_with_callback(cb: Callback) -> TIMER {
-        TIMER {
-            callback: Some(cb),
-            fired: [false; 4],
-        }
-    }
-
-    pub fn new() -> TIMER {
+    pub fn new(flags: &'static [OptionalCell<bool>; 4]) -> TIMER {
         TIMER {
             callback: None,
-            fired: [false; 4],
+            fired: flags,
         }
     }
 
@@ -139,5 +142,15 @@ impl TIMER {
             _ => return,
         };
         self.CS.write(m);
+    }
+
+    pub fn has_fired(&self, ch: usize) -> bool {
+        match ch {
+            0 | 1 | 2 | 3 => match self.fired[ch].take() {
+                Some(f) => f,
+                None => false,
+            },
+            _ => false,
+        }
     }
 }
