@@ -86,11 +86,22 @@ static mut DEBUG_CONTEXT: Option<&'static DebugContext> = None;
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
 unsafe fn puts(s: &str) {
-    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(s));
+    let s2 = ["[Exception] ", s].concat();
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(&s2));
+}
+
+unsafe fn puts2(s: &str) {
+    let s2 = ["[Exception] ", s].concat();
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(&s2));
 }
 
 unsafe fn hex(v: u32) {
     DEBUG_CONTEXT.unwrap().callback.map(|c| c.hex(v));
+}
+
+unsafe fn hexln(v: u32) {
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.hex(v));
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts("\n"));
 }
 
 /// Print verbose information about the exception and the panic.
@@ -98,8 +109,7 @@ fn default_exception_handler(e: &ExceptionContext) {
     let lr = e.lr;
     unsafe {
         puts("At exception handler from 0x");
-        hex(lr as u32);
-        puts("\n");
+        hexln(lr as u32);
     }
 }
 
@@ -116,17 +126,15 @@ fn irq_handler(e: &ExceptionContext) {
             let pend = int.get_raw_pending();
             puts("IRQ pending: ");
             hex((pend & 0xFFFF_FFFF) as u32);
-            puts(" ");
-            hex(((pend >> 32) & 0xFFFF_FFFF) as u32);
-            puts("\n");
+            puts2(" ");
+            hexln(((pend >> 32) & 0xFFFF_FFFF) as u32);
             for id in 0..63 {
                 if (pend & (1 << id)) != 0 {
                     let devs = DEVICES.unwrap().irq_devices;
                     for d in devs.iter() {
                         if d.int_no.contains(&id) {
                             puts("  from device: ");
-                            hex(id);
-                            puts("\n");
+                            hexln(id);
                             d.device.map(|d| d.on_fire(id));
                         }
                     }
@@ -136,16 +144,14 @@ fn irq_handler(e: &ExceptionContext) {
             let pend = int.get_raw_basic_pending();
             if pend != 0 {
                 puts("Basic IRQ pending: ");
-                hex(pend);
-                puts("\n");
+                hexln(pend);
                 for id in 0..7 {
                     if (pend & (1 << id)) != 0 {
                         let devs = DEVICES.unwrap().basic_irq_devices;
                         for d in devs.iter() {
                             if d.int_no.contains(&id) {
                                 puts("  from device: ");
-                                hex(id);
-                                puts("\n");
+                                hexln(id);
                                 d.device.map(|d| d.on_fire(id));
                             }
                         }

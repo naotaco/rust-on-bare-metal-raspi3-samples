@@ -138,8 +138,16 @@ fn user_main() -> ! {
             ]
         );
 
+        let arm_timer_flag = static_init!(
+            optional_cell::OptionalCell<bool>,
+            optional_cell::OptionalCell::empty()
+        );
+
         let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
-        let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
+        let arm_timer = static_init!(
+            arm_timer::ArmTimer,
+            arm_timer::ArmTimer::new(arm_timer_flag)
+        );
         let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
 
         // setup irq handlers with drivers that have capability of irq handling.
@@ -172,12 +180,17 @@ fn user_main() -> ! {
         dma.turn_on(0);
         dma.exec(0, &cb);
 
+        // main looooop
         loop {
             if timer.has_fired(1) {
-                uart.puts("Timer fired ch1\n");
+                uart.puts("[main] Timer fired ch1\n");
                 let current = timer.get_counter32();
                 let duration = 200_0000; // maybe 1sec.
                 timer.set(1, duration + current);
+            }
+
+            if arm_timer.has_fired() {
+                uart.puts("[main] Arm timer fired\n");
             }
         }
     }

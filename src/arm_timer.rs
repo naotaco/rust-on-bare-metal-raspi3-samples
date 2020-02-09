@@ -1,3 +1,4 @@
+use crate::optional_cell::OptionalCell;
 use register::{
     mmio::{ReadOnly, ReadWrite, WriteOnly},
     register_bitfields,
@@ -6,7 +7,7 @@ use register::{
 const TIMER_BASE: u32 = super::MMIO_BASE + 0xB400;
 
 pub struct ArmTimer {
-    _some_value: u32,
+    fired: &'static OptionalCell<bool>,
 }
 
 #[allow(non_snake_case)]
@@ -79,16 +80,15 @@ impl crate::exception::InterruptDevice for ArmTimer {
     fn on_fire(&self, id: u32) {
         if id == BASIC_INT_NO_ARM_TIMER {
             self.clear_irq();
+            self.fired.insert(Some(true));
         }
     }
 }
 
 #[allow(dead_code)]
 impl ArmTimer {
-    pub fn new() -> ArmTimer {
-        ArmTimer {
-            _some_value: 0x1234aaaa,
-        }
+    pub fn new(fired: &'static OptionalCell<bool>) -> ArmTimer {
+        ArmTimer { fired }
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
@@ -121,5 +121,12 @@ impl ArmTimer {
 
     pub fn clear_irq(&self) {
         self.IRQ_CLEAR.set(1);
+    }
+
+    pub fn has_fired(&self) -> bool {
+        match self.fired.take() {
+            Some(f) => f,
+            None => false,
+        }
     }
 }

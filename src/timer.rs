@@ -62,17 +62,6 @@ impl core::ops::Deref for TIMER {
 
 impl crate::exception::InterruptDevice for TIMER {
     fn on_fire(&self, id: u32) {
-        // match id {
-        //     0 | 1 | 2 | 3 => {
-
-        //         // valid channnels
-        //         self.clear(1);
-        //         // self.fired[id as usize] = true;
-        //         self.fired.insert(Some(&[true; 4]));
-        //     }
-        //     _ => {}
-        // }
-
         for ch in 0..=3 {
             if self.is_match(ch) {
                 self.clear(ch);
