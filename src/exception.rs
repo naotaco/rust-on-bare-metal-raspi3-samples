@@ -116,9 +116,9 @@ fn default_exception_handler(e: &ExceptionContext) {
 /// Print verbose information about the exception and the panic.
 fn irq_handler(e: &ExceptionContext) {
     unsafe {
-        // puts("IRQ handler from 0x");
-        // hex(e.elr_el1 as u32);
-        // puts("\n");
+        puts("IRQ handler from 0x");
+        hex(e.elr_el1 as u32);
+        puts("\n");
 
         let int = crate::interrupt::Interrupt::new();
 

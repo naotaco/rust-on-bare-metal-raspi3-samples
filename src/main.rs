@@ -53,6 +53,7 @@ static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
     size: 0x200_0000,
 };
 
+#[allow(dead_code)]
 fn init(data_addr: u32, size: usize, init_data: u32) {
     for i in 0..size / 4 {
         let p: *mut u32 = (data_addr + (i * 4) as u32) as *mut u32;
@@ -62,6 +63,7 @@ fn init(data_addr: u32, size: usize, init_data: u32) {
     }
 }
 
+#[allow(dead_code)]
 fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
     if size <= 128 {
         for i in 0..size / 4 {
@@ -102,7 +104,7 @@ unsafe fn user_main() -> ! {
     match uart.init(&mut mbox) {
         Ok(_) => uart.puts("\n[0] UART is live!\n"),
         Err(_) => loop {
-            unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
+            asm!("wfe" :::: "volatile"); // If UART fails, abort early
         },
     }
 
@@ -232,6 +234,7 @@ unsafe fn user_main() -> ! {
     }
 }
 
+#[allow(dead_code)]
 struct MainTaskContext<'a> {
     timer_fired: bool,
     arm_timer_fired: bool,
