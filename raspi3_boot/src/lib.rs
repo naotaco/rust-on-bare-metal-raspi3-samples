@@ -84,3 +84,8 @@ pub unsafe fn enable_irq() {
 pub unsafe fn disable_irq() {
     asm!("msr daifset, #2");
 }
+
+/// Sleep CPU
+pub unsafe fn wfe() {
+    asm!("wfe");
+}

@@ -49,7 +49,7 @@ extern crate alloc;
 
 #[global_allocator]
 static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
-    base: 0x400_0000,
+    base: 0x600_0000,
     size: 0x200_0000,
 };
 
@@ -90,122 +90,171 @@ fn kernel_entry() {
         exception::el2_to_el1_transition(user_main as *const () as u64);
     }
 }
-fn user_main() -> ! {
+
+unsafe fn user_main() -> ! {
     arm_debug::setup_debug();
 
-    unsafe {
-        //let uart = uart::Uart::new();
-        let uart = static_init!(uart::Uart, uart::Uart::new());
-        let mut mbox = mbox::Mbox::new();
+    //let uart = uart::Uart::new();
+    let uart = static_init!(uart::Uart, uart::Uart::new());
+    let mut mbox = mbox::Mbox::new();
 
-        // set up serial console
-        match uart.init(&mut mbox) {
-            Ok(_) => uart.puts("\n[0] UART is live!\n"),
-            Err(_) => loop {
-                unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
-            },
-        }
+    // set up serial console
+    match uart.init(&mut mbox) {
+        Ok(_) => uart.puts("\n[0] UART is live!\n"),
+        Err(_) => loop {
+            unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
+        },
+    }
 
-        unsafe {
-            GLOBAL_ALLOCATOR.init();
+    GLOBAL_ALLOCATOR.init();
 
-            let addr = exception::set_vbar_el1();
-            uart.puts("set vbar");
-            uart.hex((addr & 0xFFFF_FFFF) as u32);
-        }
+    let addr = exception::set_vbar_el1();
+    uart.puts("set vbar");
+    uart.hex((addr & 0xFFFF_FFFF) as u32);
 
-        // Section 2.4, 2.5
-        let src = 0x200_0000;
-        let dest = 0x300_0000;
-        let size = 64;
+    // Section 2.4, 2.5
+    let src = 0x200_0000;
+    let dest = 0x800_0000;
+    let size = 0x600_0000;
 
-        uart.puts("Initializing...\n");
+    uart.puts("Initializing...\n");
 
-        init(src, size, 0xFF00_0000);
-        init(dest, size, 0x1200_0000);
+    // init(src, size, 0xFF00_0000);
+    // init(dest, size, 0x1200_0000);
 
-        dump(src, size, &uart);
-        dump(dest, size, &uart);
+    // dump(src, size, &uart);
+    // dump(dest, size, &uart);
 
-        // create static instances of drivers.
-        let timer_flags = static_init!(
-            [optional_cell::OptionalCell<bool>; 4],
-            [
-                optional_cell::OptionalCell::empty(),
-                optional_cell::OptionalCell::empty(),
-                optional_cell::OptionalCell::empty(),
-                optional_cell::OptionalCell::empty()
-            ]
-        );
-
-        let arm_timer_flag = static_init!(
-            optional_cell::OptionalCell<bool>,
+    // create static instances of drivers.
+    let timer_flags = static_init!(
+        [optional_cell::OptionalCell<bool>; 4],
+        [
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
             optional_cell::OptionalCell::empty()
-        );
+        ]
+    );
 
-        let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
-        let arm_timer = static_init!(
-            arm_timer::ArmTimer,
-            arm_timer::ArmTimer::new(arm_timer_flag)
-        );
-        let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
+    let arm_timer_flag = static_init!(
+        optional_cell::OptionalCell<bool>,
+        optional_cell::OptionalCell::empty()
+    );
+    let dma_flags = static_init!(
+        [optional_cell::OptionalCell<bool>; 16],
+        [
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+        ]
+    );
 
-        // setup irq handlers with drivers that have capability of irq handling.
-        setup_irq_handlers(timer, arm_timer, dma, uart);
+    let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
+    let arm_timer = static_init!(
+        arm_timer::ArmTimer,
+        arm_timer::ArmTimer::new(arm_timer_flag)
+    );
+    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new(dma_flags));
 
-        // enable interrupt handling at int controller.
-        let int = interrupt::Interrupt::new();
-        int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
-        uart.puts("Enabling Irq1\n");
-        int.enable_irq(interrupt::InterruptId::TIMER1);
-        int.enable_irq(interrupt::InterruptId::DMA);
+    // setup irq handlers with drivers that have capability of irq handling.
+    setup_irq_handlers(timer, arm_timer, dma, uart);
 
-        // enable receiving irq at CPU
-        raspi3_boot::enable_irq();
+    // enable interrupt handling at int controller.
+    let int = interrupt::Interrupt::new();
+    int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
+    uart.puts("Enabling Irq1\n");
+    int.enable_irq(interrupt::InterruptId::TIMER1);
+    int.enable_irq(interrupt::InterruptId::DMA);
 
-        // timer
-        let current = timer.get_counter32();
-        let duration = 200_0000; // maybe 1sec.
-        uart.puts("Starting timer\n");
-        timer.set(1, duration + current);
+    // enable receiving irq at CPU
+    raspi3_boot::enable_irq();
 
-        // arm timer
-        arm_timer.enable();
-        arm_timer.start_free_run();
-        arm_timer.enable_int();
-        arm_timer.set_count_down(1000000);
+    // timer
+    let current = timer.get_counter32();
+    let duration = 200_0000; // maybe 1sec.
+    uart.puts("Starting timer\n");
+    timer.set(1, duration + current);
 
-        // dma
-        let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
-        dma.turn_on(0);
-        dma.exec(0, &cb);
+    // arm timer
+    arm_timer.enable();
+    arm_timer.start_free_run();
+    arm_timer.enable_int();
+    arm_timer.set_count_down(1000000);
 
-        // main looooop
-        loop {
-            let mut timer_fired = false;
-            let mut arm_timer_fired = false;
-            {
-                // critical section start:
-                raspi3_boot::disable_irq();
+    // dma
+    let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
+    dma.turn_on(0);
+    dma.exec(0, &cb);
 
-                timer_fired = timer.has_fired(1);
-                arm_timer_fired = arm_timer.has_fired();
+    // main looooop
+    loop {
+        let mut context = MainTaskContext {
+            timer_fired: false,
+            arm_timer_fired: false,
+            dma_fired: false,
 
-                // critical section end
-                raspi3_boot::enable_irq();
-            }
+            timer: &timer,
+            arm_timer: &arm_timer,
+            dma: &dma,
+            uart: &uart,
+        };
 
-            if timer_fired {
-                uart.puts("[main] Timer fired ch1\n");
-                let current = timer.get_counter32();
-                let duration = 200_0000; // maybe 1sec.
-                timer.set(1, duration + current);
-            }
+        {
+            // critical section start:
+            raspi3_boot::disable_irq();
 
-            if arm_timer_fired {
-                uart.puts("[main] Arm timer fired\n");
-            }
+            context.timer_fired = timer.has_fired(1);
+            context.arm_timer_fired = arm_timer.has_fired();
+            context.dma_fired = dma.has_fired(0);
+
+            // critical section end
+            raspi3_boot::enable_irq();
         }
+
+        // perform main task once.
+        main_task(&mut context);
+
+        // sleep until next event (e.g. interrupt)
+        raspi3_boot::wfe();
+    }
+}
+
+struct MainTaskContext<'a> {
+    timer_fired: bool,
+    arm_timer_fired: bool,
+    dma_fired: bool,
+
+    timer: &'a timer::TIMER,
+    arm_timer: &'a arm_timer::ArmTimer,
+    dma: &'a dmac::DMAC4,
+    uart: &'a uart::Uart,
+}
+
+fn main_task(context: &mut MainTaskContext) {
+    if context.timer_fired {
+        context.uart.puts("[main] Timer fired ch1\n");
+        let current = context.timer.get_counter32();
+        let duration = 200_0000; // maybe 1sec.
+        context.timer.set(1, duration + current);
+    }
+    if context.arm_timer_fired {
+        context.uart.puts("[main] Arm timer fired\n");
+    }
+    if context.dma_fired {
+        context.uart.puts("[main] DMA trans done.\n");
     }
 }
 

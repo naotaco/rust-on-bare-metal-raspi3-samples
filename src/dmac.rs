@@ -1,3 +1,4 @@
+use crate::optional_cell::OptionalCell;
 use core::sync::atomic::compiler_fence;
 use register::{mmio::ReadWrite, register_bitfields, InMemoryRegister};
 
@@ -583,13 +584,16 @@ impl core::ops::Deref for DMAC4 {
     }
 }
 
-pub struct DMAC4 {}
+pub struct DMAC4 {
+    fired: &'static [OptionalCell<bool>; 16],
+}
 
 impl crate::exception::InterruptDevice for DMAC4 {
     fn on_fire(&self, id: u32) {
         for ch in 0..=15 {
             if self.is_interrupt_pending(ch) {
                 self.clear_interrupt(ch);
+                self.fired[ch].insert(Some(true));
             }
         }
     }
@@ -597,8 +601,8 @@ impl crate::exception::InterruptDevice for DMAC4 {
 
 #[allow(dead_code)]
 impl DMAC4 {
-    pub fn new() -> DMAC4 {
-        DMAC4 {}
+    pub fn new(fired: &'static [OptionalCell<bool>; 16]) -> DMAC4 {
+        DMAC4 { fired }
     }
     fn ptr() -> *const RegisterBlock {
         DMAC_BASE as *const _
@@ -714,5 +718,16 @@ impl DMAC4 {
         }
 
         self.INT_STATUS.read(GLOBAL_INT::STATUS) & (1 << ch as u32) != 0
+    }
+
+    pub fn has_fired(&self, ch: usize) -> bool {
+        if ch > 15 {
+            return false;
+        }
+
+        match self.fired[ch].take() {
+            Some(f) => f,
+            None => false,
+        }
     }
 }
