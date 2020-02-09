@@ -173,11 +173,21 @@ unsafe fn setup_irq_handlers(
     dma: &'static dmac::DMAC4,
     uart: &'static uart::Uart,
 ) {
+    let timer_int_ids = static_init!(
+        [u32; 2],
+        [
+            interrupt::InterruptId::TIMER1,
+            interrupt::InterruptId::TIMER3
+        ]
+    );
+    let dma_int_ids = static_init!([u32; 1], [interrupt::InterruptId::DMA]);
+    let arm_timer_int_ids = static_init!([u32; 1], [interrupt::BasicInterruptId::ARM_TIMER]);
+
     let irq_devices = static_init!(
         [exception::IrqHandler; 2],
         [
-            exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), 0x00001111),
-            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), 0x1112)
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), timer_int_ids),
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), dma_int_ids)
         ]
     );
 
@@ -185,7 +195,7 @@ unsafe fn setup_irq_handlers(
         [exception::IrqHandler; 1],
         [exception::IrqHandler::new(
             optional_cell::OptionalCell::new(arm_timer),
-            0x00002222
+            arm_timer_int_ids
         )]
     );
 

@@ -34,24 +34,15 @@ pub trait InterruptDevice {
 
 pub struct IrqHandler {
     device: OptionalCell<&'static dyn InterruptDevice>,
-    _some_value: u32,
+    int_no: &'static [u32],
 }
 
 impl IrqHandler {
-    pub fn new(device: OptionalCell<&'static dyn InterruptDevice>, some_value: u32) -> IrqHandler {
-        IrqHandler {
-            device,
-            _some_value: some_value,
-        }
-    }
-}
-
-impl Default for IrqHandler {
-    fn default() -> IrqHandler {
-        IrqHandler {
-            device: OptionalCell::empty(),
-            _some_value: 0x00001234,
-        }
+    pub fn new(
+        device: OptionalCell<&'static dyn InterruptDevice>,
+        int_no: &'static [u32],
+    ) -> IrqHandler {
+        IrqHandler { device, int_no }
     }
 }
 
@@ -115,9 +106,9 @@ fn default_exception_handler(e: &ExceptionContext) {
 /// Print verbose information about the exception and the panic.
 fn irq_handler(e: &ExceptionContext) {
     unsafe {
-        puts("IRQ handler from 0x");
-        hex(e.elr_el1 as u32);
-        puts("\n");
+        // puts("IRQ handler from 0x");
+        // hex(e.elr_el1 as u32);
+        // puts("\n");
 
         let int = crate::interrupt::Interrupt::new();
 
@@ -132,7 +123,12 @@ fn irq_handler(e: &ExceptionContext) {
                 if (pend & (1 << id)) != 0 {
                     let devs = DEVICES.unwrap().irq_devices;
                     for d in devs.iter() {
-                        d.device.map(|d| d.on_fire(id));
+                        if d.int_no.contains(&id) {
+                            puts("  from device: ");
+                            hex(id);
+                            puts("\n");
+                            d.device.map(|d| d.on_fire(id));
+                        }
                     }
                 }
             }
@@ -146,7 +142,12 @@ fn irq_handler(e: &ExceptionContext) {
                     if (pend & (1 << id)) != 0 {
                         let devs = DEVICES.unwrap().basic_irq_devices;
                         for d in devs.iter() {
-                            d.device.map(|d| d.on_fire(id));
+                            if d.int_no.contains(&id) {
+                                puts("  from device: ");
+                                hex(id);
+                                puts("\n");
+                                d.device.map(|d| d.on_fire(id));
+                            }
                         }
                     }
                 }
