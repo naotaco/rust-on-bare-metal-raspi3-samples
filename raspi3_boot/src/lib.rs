@@ -79,3 +79,8 @@ extern "C" {
 pub unsafe fn enable_irq() {
     asm!("msr daifclr, #2");
 }
+
+/// Disable irq
+pub unsafe fn disable_irq() {
+    asm!("msr daifset, #2");
+}

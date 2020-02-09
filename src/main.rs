@@ -182,14 +182,27 @@ fn user_main() -> ! {
 
         // main looooop
         loop {
-            if timer.has_fired(1) {
+            let mut timer_fired = false;
+            let mut arm_timer_fired = false;
+            {
+                // critical section start:
+                raspi3_boot::disable_irq();
+
+                timer_fired = timer.has_fired(1);
+                arm_timer_fired = arm_timer.has_fired();
+
+                // critical section end
+                raspi3_boot::enable_irq();
+            }
+
+            if timer_fired {
                 uart.puts("[main] Timer fired ch1\n");
                 let current = timer.get_counter32();
                 let duration = 200_0000; // maybe 1sec.
                 timer.set(1, duration + current);
             }
 
-            if arm_timer.has_fired() {
+            if arm_timer_fired {
                 uart.puts("[main] Arm timer fired\n");
             }
         }

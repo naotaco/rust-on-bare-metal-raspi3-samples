@@ -124,9 +124,9 @@ fn irq_handler(e: &ExceptionContext) {
 
         if int.is_any_irq_pending() {
             let pend = int.get_raw_pending();
-            puts("IRQ pending: ");
+            puts2("IRQ pending: ");
             hex((pend & 0xFFFF_FFFF) as u32);
-            puts2(" ");
+            puts(" ");
             hexln(((pend >> 32) & 0xFFFF_FFFF) as u32);
             for id in 0..63 {
                 if (pend & (1 << id)) != 0 {
