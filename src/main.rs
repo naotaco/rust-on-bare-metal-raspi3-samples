@@ -90,7 +90,6 @@ fn kernel_entry() {
         exception::el2_to_el1_transition(user_main as *const () as u64);
     }
 }
-
 fn user_main() -> ! {
     arm_debug::setup_debug();
 
@@ -136,9 +135,6 @@ fn user_main() -> ! {
         // setup irq handlers with drivers that have capability of irq handling.
         setup_irq_handlers(timer, arm_timer, dma, uart);
 
-        // enable receiving irq at CPU
-        raspi3_boot::enable_irq();
-
         // enable interrupt handling at int controller.
         let int = interrupt::Interrupt::new();
         int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
@@ -146,11 +142,14 @@ fn user_main() -> ! {
         int.enable_irq(interrupt::InterruptId::TIMER1);
         int.enable_irq(interrupt::InterruptId::DMA);
 
+        // enable receiving irq at CPU
+        raspi3_boot::enable_irq();
+
         // timer
         let current = timer.get_counter32();
         let duration = 200_0000; // maybe 1sec.
         uart.puts("Starting timer\n");
-        timer.set_c1(duration + current);
+        timer.set(1, duration + current);
 
         // arm timer
         arm_timer.enable();

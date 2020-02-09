@@ -5,11 +5,11 @@ use register::{
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
-type Callback = fn(time: u32);
+type Callback = fn(time: u32, ch: u32);
 
 pub struct TIMER {
     callback: Option<Callback>,
-    _some_value: u32,
+    fired: [bool; 4],
 }
 
 #[allow(non_snake_case)]
@@ -62,9 +62,19 @@ impl core::ops::Deref for TIMER {
 impl crate::exception::InterruptDevice for TIMER {
     fn on_fire(&self, id: u32) {
         match id {
-            1 => self.clear_c1(),
-            3 => self.clear_c3(),
+            0 | 1 | 2 | 3 => {
+                // valid channnels
+                self.clear(id);
+                // self.fired[id as usize] = true;
+            }
             _ => {}
+        }
+
+        match self.callback {
+            Some(c) => {
+                c(0, id);
+            }
+            None => {}
         }
     }
 }
@@ -74,22 +84,14 @@ impl TIMER {
     pub fn new_with_callback(cb: Callback) -> TIMER {
         TIMER {
             callback: Some(cb),
-            _some_value: 0xdeadbeef,
+            fired: [false; 4],
         }
     }
 
     pub fn new() -> TIMER {
         TIMER {
             callback: None,
-            _some_value: 0xdeadbeef,
-        }
-    }
-
-    fn tick(&self) {
-        let value: u32 = 0;
-        match self.callback {
-            Some(c) => c(value),
-            _ => {}
+            fired: [false; 4],
         }
     }
 
@@ -106,30 +108,36 @@ impl TIMER {
         self.CLO.read(CLO::TIME)
     }
 
-    pub fn set_c1(&self, t: u32) {
-        self.C1.set(t);
+    pub fn set(&self, ch: u32, t: u32) {
+        let r = match ch {
+            0 => &self.C0,
+            1 => &self.C1,
+            2 => &self.C2,
+            3 => &self.C3,
+            _ => return,
+        };
+        r.set(t);
     }
 
-    pub fn set_c3(&self, t: u32) {
-        self.C3.set(t);
+    pub fn is_match(&self, ch: u32) -> bool {
+        let m = match ch {
+            0 => CS::M0,
+            1 => CS::M1,
+            2 => CS::M2,
+            3 => CS::M3,
+            _ => return false,
+        };
+        self.CS.is_set(m)
     }
 
-    pub fn is_match_c1(&self) -> bool {
-        //self.CS.read(CS::M1) == CS::M1::Match
-        self.CS.is_set(CS::M1)
-        // let a: u32 = CS::M1::Match;
-        // == CS::M1::Match;
-    }
-
-    pub fn is_match_c3(&self) -> bool {
-        self.CS.is_set(CS::M3)
-    }
-
-    pub fn clear_c1(&self) {
-        self.CS.write(CS::M1::Match);
-    }
-
-    pub fn clear_c3(&self) {
-        self.CS.write(CS::M3::Match);
+    fn clear(&self, ch: u32) {
+        let m = match ch {
+            0 => CS::M0::Match,
+            1 => CS::M1::Match,
+            2 => CS::M2::Match,
+            3 => CS::M3::Match,
+            _ => return,
+        };
+        self.CS.write(m);
     }
 }
