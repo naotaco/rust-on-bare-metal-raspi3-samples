@@ -113,6 +113,7 @@ unsafe fn user_main() -> ! {
     let addr = exception::set_vbar_el1();
     uart.puts("set vbar");
     uart.hex((addr & 0xFFFF_FFFF) as u32);
+    uart.puts("\n");
 
     // Section 2.4, 2.5
     let src = 0x200_0000;

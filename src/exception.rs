@@ -266,58 +266,8 @@ pub unsafe fn set_vbar_el1() -> u64 {
     addr
 }
 
-#[allow(dead_code)]
-pub trait DaifField {
-    fn daif_field() -> register::Field<u32, DAIF::Register>;
-}
-
-pub struct Debug;
-pub struct SError;
-pub struct IRQ;
-pub struct FIQ;
-
-#[allow(dead_code)]
-impl DaifField for Debug {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::D
-    }
-}
-
-#[allow(dead_code)]
-impl DaifField for SError {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::A
-    }
-}
-
-#[allow(dead_code)]
-impl DaifField for IRQ {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::I
-    }
-}
-
-#[allow(dead_code)]
-impl DaifField for FIQ {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::F
-    }
-}
-
-#[allow(dead_code)]
-pub fn is_masked<T: DaifField>() -> bool {
-    DAIF.is_set(T::daif_field())
-}
-
-#[allow(dead_code)]
 #[inline(always)]
 pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
-    // Enable timer counter registers for EL1.
-    CNTHCTL_EL2.write(CNTHCTL_EL2::EL1PCEN::SET + CNTHCTL_EL2::EL1PCTEN::SET);
-
-    // No offset for reading the counters.
-    CNTVOFF_EL2.set(0);
-
     // Set EL1 execution state to AArch64.
     HCR_EL2.write(HCR_EL2::RW::EL1IsAarch64);
 
