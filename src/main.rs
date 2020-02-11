@@ -228,7 +228,7 @@ unsafe fn user_main() -> ! {
         }
 
         // perform main task once.
-        main_task(&mut context);
+        main_task(context);
 
         // sleep until next event (e.g. interrupt)
         raspi3_boot::wfe();
@@ -247,7 +247,7 @@ struct MainTaskContext<'a> {
     uart: &'a uart::Uart,
 }
 
-fn main_task(context: &mut MainTaskContext) {
+fn main_task(context: MainTaskContext) {
     if context.timer_fired {
         context.uart.puts("[main] Timer fired ch1\n");
         let current = context.timer.get_counter32();
