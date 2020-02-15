@@ -60,8 +60,8 @@ impl core::ops::Deref for TIMER {
     }
 }
 
-impl crate::exception::InterruptDevice for TIMER {
-    fn on_fire(&self, id: u32) {
+impl crate::exception::InterruptionSource for TIMER {
+    fn on_interruption(&self, id: u32) {
         for ch in 0..=3 {
             if self.is_match(ch) {
                 self.clear(ch);

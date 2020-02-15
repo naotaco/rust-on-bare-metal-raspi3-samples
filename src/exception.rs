@@ -28,18 +28,18 @@ struct ExceptionContext {
     spsr_el1: SpsrEL1,
 }
 
-pub trait InterruptDevice {
-    fn on_fire(&self, id: u32);
+pub trait InterruptionSource {
+    fn on_interruption(&self, id: u32);
 }
 
 pub struct IrqHandler {
-    device: OptionalCell<&'static dyn InterruptDevice>,
+    device: OptionalCell<&'static dyn InterruptionSource>,
     int_no: &'static [u32],
 }
 
 impl IrqHandler {
     pub fn new(
-        device: OptionalCell<&'static dyn InterruptDevice>,
+        device: OptionalCell<&'static dyn InterruptionSource>,
         int_no: &'static [u32],
     ) -> IrqHandler {
         IrqHandler { device, int_no }
@@ -135,7 +135,7 @@ fn irq_handler(e: &ExceptionContext) {
                         if d.int_no.contains(&id) {
                             puts("  from device: ");
                             hexln(id);
-                            d.device.map(|d| d.on_fire(id));
+                            d.device.map(|d| d.on_interruption(id));
                         }
                     }
                 }
@@ -152,7 +152,7 @@ fn irq_handler(e: &ExceptionContext) {
                             if d.int_no.contains(&id) {
                                 puts("  from device: ");
                                 hexln(id);
-                                d.device.map(|d| d.on_fire(id));
+                                d.device.map(|d| d.on_interruption(id));
                             }
                         }
                     }

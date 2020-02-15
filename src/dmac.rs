@@ -588,8 +588,8 @@ pub struct DMAC4 {
     fired: &'static [OptionalCell<bool>; 16],
 }
 
-impl crate::exception::InterruptDevice for DMAC4 {
-    fn on_fire(&self, _id: u32) {
+impl crate::exception::InterruptionSource for DMAC4 {
+    fn on_interruption(&self, _id: u32) {
         for ch in 0..=15 {
             if self.is_interrupt_pending(ch) {
                 self.clear_interrupt(ch);
