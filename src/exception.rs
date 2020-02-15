@@ -293,7 +293,7 @@ pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
     asm::eret()
 }
 
-pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> bool {
+pub unsafe fn set_irq_handlers(h: &'static IrqHandlersSettings) -> bool {
     (*DEVICES.get_or_insert(h)) as *const _ == h
 }
 

@@ -299,7 +299,7 @@ unsafe fn setup_irq_handlers(
         exception::IrqHandlersSettings::new(irq_devices, basic_irq_devices)
     );
 
-    let register_result = exception::set_irq_handlers2(handler_info);
+    let register_result = exception::set_irq_handlers(handler_info);
 
     let debug_context = static_init!(
         exception::DebugContext,
