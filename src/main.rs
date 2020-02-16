@@ -281,17 +281,14 @@ unsafe fn setup_irq_handlers(
     let irq_devices = static_init!(
         [exception::IrqHandler; 2],
         [
-            exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), timer_int_ids),
-            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), dma_int_ids)
+            exception::IrqHandler::new(timer, timer_int_ids),
+            exception::IrqHandler::new(dma, dma_int_ids)
         ]
     );
 
     let basic_irq_devices = static_init!(
         [exception::IrqHandler; 1],
-        [exception::IrqHandler::new(
-            optional_cell::OptionalCell::new(arm_timer),
-            arm_timer_int_ids
-        )]
+        [exception::IrqHandler::new(arm_timer, arm_timer_int_ids)]
     );
 
     let handler_info = static_init!(

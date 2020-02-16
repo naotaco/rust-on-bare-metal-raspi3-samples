@@ -33,15 +33,12 @@ pub trait InterruptionSource {
 }
 
 pub struct IrqHandler {
-    device: OptionalCell<&'static dyn InterruptionSource>,
+    device: &'static dyn InterruptionSource,
     int_no: &'static [u32],
 }
 
 impl IrqHandler {
-    pub fn new(
-        device: OptionalCell<&'static dyn InterruptionSource>,
-        int_no: &'static [u32],
-    ) -> IrqHandler {
+    pub fn new(device: &'static dyn InterruptionSource, int_no: &'static [u32]) -> IrqHandler {
         IrqHandler { device, int_no }
     }
 }
@@ -135,7 +132,7 @@ fn irq_handler(e: &ExceptionContext) {
                         if d.int_no.contains(&id) {
                             puts("  from device: ");
                             hexln(id);
-                            d.device.map(|d| d.on_interruption(id));
+                            d.device.on_interruption(id);
                         }
                     }
                 }
@@ -152,7 +149,7 @@ fn irq_handler(e: &ExceptionContext) {
                             if d.int_no.contains(&id) {
                                 puts("  from device: ");
                                 hexln(id);
-                                d.device.map(|d| d.on_interruption(id));
+                                d.device.on_interruption(id);
                             }
                         }
                     }
