@@ -6,11 +6,8 @@ use register::{
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
-type Callback = fn(time: u32, ch: u32);
-
 pub struct TIMER {
-    callback: Option<Callback>,
-    fired: &'static [OptionalCell<bool>; 4],
+    fired: [OptionalCell<bool>; 4],
 }
 
 #[allow(non_snake_case)]
@@ -61,30 +58,20 @@ impl core::ops::Deref for TIMER {
 }
 
 impl crate::exception::InterruptionSource for TIMER {
-    fn on_interruption(&self, id: u32) {
+    fn on_interruption(&self, _id: u32) {
         for ch in 0..=3 {
             if self.is_match(ch) {
                 self.clear(ch);
                 self.fired[ch as usize].insert(Some(true));
             }
         }
-
-        match self.callback {
-            Some(c) => {
-                c(0, id);
-            }
-            None => {}
-        }
     }
 }
 
 #[allow(dead_code)]
 impl TIMER {
-    pub fn new(flags: &'static [OptionalCell<bool>; 4]) -> TIMER {
-        TIMER {
-            callback: None,
-            fired: flags,
-        }
+    pub fn new(flags: [OptionalCell<bool>; 4]) -> TIMER {
+        TIMER { fired: flags }
     }
 
     fn ptr() -> *const RegisterBlock {

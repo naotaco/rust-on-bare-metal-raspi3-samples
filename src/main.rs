@@ -129,20 +129,14 @@ unsafe fn user_main() -> ! {
     // dump(dest, size, &uart);
 
     // create static instances of drivers.
-    let timer_flags = static_init!(
-        [optional_cell::OptionalCell<bool>; 4],
-        [
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty()
-        ]
-    );
+    let timer_flags = [
+        optional_cell::OptionalCell::empty(),
+        optional_cell::OptionalCell::empty(),
+        optional_cell::OptionalCell::empty(),
+        optional_cell::OptionalCell::empty(),
+    ];
 
-    let arm_timer_flag = static_init!(
-        optional_cell::OptionalCell<bool>,
-        optional_cell::OptionalCell::empty()
-    );
+    let arm_timer_flag = optional_cell::OptionalCell::empty();
     let dma_flags = [
         optional_cell::OptionalCell::empty(),
         optional_cell::OptionalCell::empty(),
@@ -227,7 +221,7 @@ unsafe fn user_main() -> ! {
         // perform main task once.
         main_task(context);
 
-        // sleep until next event (e.g. interrupt)
+        // sleep until interrupt.
         raspi3_boot::wfi();
     }
 }
