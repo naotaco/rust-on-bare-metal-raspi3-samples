@@ -228,7 +228,7 @@ unsafe fn user_main() -> ! {
         main_task(context);
 
         // sleep until next event (e.g. interrupt)
-        raspi3_boot::wfe();
+        raspi3_boot::wfi();
     }
 }
 

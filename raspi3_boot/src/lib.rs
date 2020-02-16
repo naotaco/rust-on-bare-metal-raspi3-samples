@@ -89,3 +89,8 @@ pub unsafe fn disable_irq() {
 pub unsafe fn wfe() {
     asm!("wfe");
 }
+
+/// sleep CPU until interrupt
+pub unsafe fn wfi(){
+    asm!("wfi");
+}
