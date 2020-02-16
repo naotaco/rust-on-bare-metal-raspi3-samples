@@ -585,7 +585,7 @@ impl core::ops::Deref for DMAC4 {
 }
 
 pub struct DMAC4 {
-    fired: &'static [OptionalCell<bool>; 16],
+    fired: [OptionalCell<bool>; 16],
 }
 
 impl crate::exception::InterruptionSource for DMAC4 {
@@ -601,7 +601,7 @@ impl crate::exception::InterruptionSource for DMAC4 {
 
 #[allow(dead_code)]
 impl DMAC4 {
-    pub fn new(fired: &'static [OptionalCell<bool>; 16]) -> DMAC4 {
+    pub fn new(fired: [OptionalCell<bool>; 16]) -> DMAC4 {
         DMAC4 { fired }
     }
     fn ptr() -> *const RegisterBlock {

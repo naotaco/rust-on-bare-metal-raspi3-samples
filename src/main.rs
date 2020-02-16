@@ -143,9 +143,7 @@ unsafe fn user_main() -> ! {
         optional_cell::OptionalCell<bool>,
         optional_cell::OptionalCell::empty()
     );
-    let dma_flags = static_init!(
-        [optional_cell::OptionalCell<bool>; 16],
-        [
+    let dma_flags =  [
             optional_cell::OptionalCell::empty(),
             optional_cell::OptionalCell::empty(),
             optional_cell::OptionalCell::empty(),
@@ -162,8 +160,7 @@ unsafe fn user_main() -> ! {
             optional_cell::OptionalCell::empty(),
             optional_cell::OptionalCell::empty(),
             optional_cell::OptionalCell::empty(),
-        ]
-    );
+        ];
 
     let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
     let arm_timer = static_init!(
