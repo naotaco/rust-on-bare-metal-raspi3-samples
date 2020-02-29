@@ -135,6 +135,7 @@ impl TIMER {
 
     pub fn has_fired(&self, ch: usize) -> bool {
         match ch {
+            // take() returns a value and leave default value.
             0 | 1 | 2 | 3 => self.fired[ch].take(),
             _ => false,
         }

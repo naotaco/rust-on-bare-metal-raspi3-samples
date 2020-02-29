@@ -7,7 +7,7 @@ use register::{
 const TIMER_BASE: u32 = super::MMIO_BASE + 0xB400;
 
 pub struct ArmTimer {
-    fired: &'static OptionalCell<bool>,
+    fired: OptionalCell<bool>,
 }
 
 #[allow(non_snake_case)]
@@ -87,8 +87,8 @@ impl crate::exception::InterruptionSource for ArmTimer {
 
 #[allow(dead_code)]
 impl ArmTimer {
-    pub fn new(fired: &'static OptionalCell<bool>) -> ArmTimer {
-        ArmTimer { fired }
+    pub fn new() -> ArmTimer {
+        ArmTimer { fired: OptionalCell::new(false) }
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _

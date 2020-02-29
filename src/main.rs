@@ -130,10 +130,6 @@ unsafe fn user_main() -> ! {
 
     // create static instances of drivers.
 
-    let arm_timer_flag = static_init!(
-        optional_cell::OptionalCell<bool>,
-        optional_cell::OptionalCell::empty()
-    );
     let dma_flags = arr_macro::arr![
         optional_cell::OptionalCell::empty();16
     ];
@@ -141,7 +137,7 @@ unsafe fn user_main() -> ! {
     let timer = static_init!(timer::TIMER, timer::TIMER::new());
     let arm_timer = static_init!(
         arm_timer::ArmTimer,
-        arm_timer::ArmTimer::new(arm_timer_flag)
+        arm_timer::ArmTimer::new()
     );
     let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new(dma_flags));
 
