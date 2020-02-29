@@ -1,4 +1,4 @@
-use crate::optional_cell::OptionalCell;
+use core::cell::Cell;
 use register::{
     mmio::{ReadOnly, ReadWrite},
     register_bitfields,
@@ -10,7 +10,7 @@ type Callback = fn(time: u32, ch: u32);
 
 pub struct TIMER {
     callback: Option<Callback>,
-    fired: &'static [OptionalCell<bool>; 4],
+    fired: [Cell<bool>; 4],
 }
 
 #[allow(non_snake_case)]
@@ -65,7 +65,7 @@ impl crate::exception::InterruptionSource for TIMER {
         for ch in 0..=3 {
             if self.is_match(ch) {
                 self.clear(ch);
-                self.fired[ch as usize].insert(Some(true));
+                self.fired[ch as usize].set(true);
             }
         }
 
@@ -80,10 +80,10 @@ impl crate::exception::InterruptionSource for TIMER {
 
 #[allow(dead_code)]
 impl TIMER {
-    pub fn new(flags: &'static [OptionalCell<bool>; 4]) -> TIMER {
+    pub fn new() -> TIMER {
         TIMER {
             callback: None,
-            fired: flags,
+            fired: arr_macro::arr![Cell::new(false);4],
         }
     }
 
@@ -135,10 +135,7 @@ impl TIMER {
 
     pub fn has_fired(&self, ch: usize) -> bool {
         match ch {
-            0 | 1 | 2 | 3 => match self.fired[ch].take() {
-                Some(f) => f,
-                None => false,
-            },
+            0 | 1 | 2 | 3 => self.fired[ch].take(),
             _ => false,
         }
     }

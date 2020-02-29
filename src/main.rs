@@ -129,40 +129,16 @@ unsafe fn user_main() -> ! {
     // dump(dest, size, &uart);
 
     // create static instances of drivers.
-    let timer_flags = static_init!(
-        [optional_cell::OptionalCell<bool>; 4],
-        [
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty()
-        ]
-    );
 
     let arm_timer_flag = static_init!(
         optional_cell::OptionalCell<bool>,
         optional_cell::OptionalCell::empty()
     );
-    let dma_flags =  [
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-            optional_cell::OptionalCell::empty(),
-        ];
+    let dma_flags = arr_macro::arr![
+        optional_cell::OptionalCell::empty();16
+    ];
 
-    let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
+    let timer = static_init!(timer::TIMER, timer::TIMER::new());
     let arm_timer = static_init!(
         arm_timer::ArmTimer,
         arm_timer::ArmTimer::new(arm_timer_flag)
