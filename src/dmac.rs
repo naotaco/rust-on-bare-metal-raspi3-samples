@@ -601,8 +601,10 @@ impl crate::exception::InterruptionSource for DMAC4 {
 
 #[allow(dead_code)]
 impl DMAC4 {
-    pub fn new(fired: [OptionalCell<bool>; 16]) -> DMAC4 {
-        DMAC4 { fired }
+    pub fn new() -> DMAC4 {
+        DMAC4 {
+            fired: arr_macro::arr![OptionalCell::empty(); 16],
+        }
     }
     fn ptr() -> *const RegisterBlock {
         DMAC_BASE as *const _

@@ -1,4 +1,4 @@
-use crate::optional_cell::OptionalCell;
+use core::cell::Cell;
 use register::{
     mmio::{ReadOnly, ReadWrite},
     register_bitfields,
@@ -7,7 +7,7 @@ use register::{
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
 pub struct TIMER {
-    fired: [OptionalCell<bool>; 4],
+    fired: [Cell<bool>; 4],
 }
 
 #[allow(non_snake_case)]
@@ -62,7 +62,7 @@ impl crate::exception::InterruptionSource for TIMER {
         for ch in 0..=3 {
             if self.is_match(ch) {
                 self.clear(ch);
-                self.fired[ch as usize].insert(Some(true));
+                self.fired[ch as usize].set(true);
             }
         }
     }
@@ -70,8 +70,10 @@ impl crate::exception::InterruptionSource for TIMER {
 
 #[allow(dead_code)]
 impl TIMER {
-    pub fn new(flags: [OptionalCell<bool>; 4]) -> TIMER {
-        TIMER { fired: flags }
+    pub fn new() -> TIMER {
+        TIMER {
+            fired: arr_macro::arr![Cell::new(false);4],
+        }
     }
 
     fn ptr() -> *const RegisterBlock {
@@ -122,10 +124,8 @@ impl TIMER {
 
     pub fn has_fired(&self, ch: usize) -> bool {
         match ch {
-            0 | 1 | 2 | 3 => match self.fired[ch].take() {
-                Some(f) => f,
-                None => false,
-            },
+            // take() returns a value and leave default value.
+            0 | 1 | 2 | 3 => self.fired[ch].take(),
             _ => false,
         }
     }

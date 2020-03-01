@@ -87,8 +87,10 @@ impl crate::exception::InterruptionSource for ArmTimer {
 
 #[allow(dead_code)]
 impl ArmTimer {
-    pub fn new(fired: OptionalCell<bool>) -> ArmTimer {
-        ArmTimer { fired }
+    pub fn new() -> ArmTimer {
+        ArmTimer {
+            fired: OptionalCell::new(false),
+        }
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _

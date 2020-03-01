@@ -128,40 +128,9 @@ unsafe fn user_main() -> ! {
     // dump(src, size, &uart);
     // dump(dest, size, &uart);
 
-    // create static instances of drivers.
-    let timer_flags = [
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-    ];
-
-    let arm_timer_flag = optional_cell::OptionalCell::empty();
-    let dma_flags = [
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-        optional_cell::OptionalCell::empty(),
-    ];
-
-    let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
-    let arm_timer = static_init!(
-        arm_timer::ArmTimer,
-        arm_timer::ArmTimer::new(arm_timer_flag)
-    );
-    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new(dma_flags));
+    let timer = static_init!(timer::TIMER, timer::TIMER::new());
+    let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
+    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
 
     // setup irq handlers with drivers that have capability of irq handling.
     setup_irq_handlers(timer, arm_timer, dma, uart);
