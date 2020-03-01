@@ -128,18 +128,9 @@ unsafe fn user_main() -> ! {
     // dump(src, size, &uart);
     // dump(dest, size, &uart);
 
-    // create static instances of drivers.
-
-    let dma_flags = arr_macro::arr![
-        optional_cell::OptionalCell::empty();16
-    ];
-
     let timer = static_init!(timer::TIMER, timer::TIMER::new());
-    let arm_timer = static_init!(
-        arm_timer::ArmTimer,
-        arm_timer::ArmTimer::new()
-    );
-    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new(dma_flags));
+    let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
+    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
 
     // setup irq handlers with drivers that have capability of irq handling.
     setup_irq_handlers(timer, arm_timer, dma, uart);
