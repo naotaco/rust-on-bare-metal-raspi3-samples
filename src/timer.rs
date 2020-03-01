@@ -1,4 +1,4 @@
-use core::cell::Cell;
+use crate::optional_cell::OptionalCell;
 use register::{
     mmio::{ReadOnly, ReadWrite},
     register_bitfields,
@@ -7,7 +7,7 @@ use register::{
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
 pub struct TIMER {
-    fired: [Cell<bool>; 4],
+    fired: [OptionalCell<bool>; 4],
 }
 
 #[allow(non_snake_case)]
@@ -72,7 +72,7 @@ impl crate::exception::InterruptionSource for TIMER {
 impl TIMER {
     pub fn new() -> TIMER {
         TIMER {
-            fired: arr_macro::arr![Cell::new(false);4],
+            fired: arr_macro::arr![OptionalCell::empty();4],
         }
     }
 
@@ -124,8 +124,11 @@ impl TIMER {
 
     pub fn has_fired(&self, ch: usize) -> bool {
         match ch {
-            // take() returns a value and leave default value.
-            0 | 1 | 2 | 3 => self.fired[ch].take(),
+            // take() returns a value and leave None.
+            0 | 1 | 2 | 3 => match self.fired[ch].take() {
+                Some(v) => v,
+                None => false,
+            },
             _ => false,
         }
     }
