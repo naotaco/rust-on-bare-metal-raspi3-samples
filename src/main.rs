@@ -165,9 +165,9 @@ unsafe fn user_main() -> ! {
     // main looooop
     loop {
         let mut context = MainTaskContext {
-            timer_fired: false,
-            arm_timer_fired: false,
-            dma_fired: false,
+            timer_occurred: false,
+            arm_timer_occurred: false,
+            dma_occurred: false,
 
             timer: &timer,
             arm_timer: &arm_timer,
@@ -179,9 +179,9 @@ unsafe fn user_main() -> ! {
             // critical section start:
             raspi3_boot::disable_irq();
 
-            context.timer_fired = timer.has_fired(1);
-            context.arm_timer_fired = arm_timer.has_fired();
-            context.dma_fired = dma.has_fired(0);
+            context.timer_occurred = timer.occurred(1);
+            context.arm_timer_occurred = arm_timer.occurred();
+            context.dma_occurred = dma.occurred(0);
 
             // critical section end
             raspi3_boot::enable_irq();
@@ -197,9 +197,9 @@ unsafe fn user_main() -> ! {
 
 #[allow(dead_code)]
 struct MainTaskContext<'a> {
-    timer_fired: bool,
-    arm_timer_fired: bool,
-    dma_fired: bool,
+    timer_occurred: bool,
+    arm_timer_occurred: bool,
+    dma_occurred: bool,
 
     timer: &'a timer::TIMER,
     arm_timer: &'a arm_timer::ArmTimer,
@@ -208,16 +208,16 @@ struct MainTaskContext<'a> {
 }
 
 fn main_task(context: MainTaskContext) {
-    if context.timer_fired {
-        context.uart.puts("[main] Timer fired ch1\n");
+    if context.timer_occurred {
+        context.uart.puts("[main] Timer occurred ch1\n");
         let current = context.timer.get_counter32();
         let duration = 200_0000; // maybe 1sec.
         context.timer.set(1, duration + current);
     }
-    if context.arm_timer_fired {
-        context.uart.puts("[main] Arm timer fired\n");
+    if context.arm_timer_occurred {
+        context.uart.puts("[main] Arm timer occurred\n");
     }
-    if context.dma_fired {
+    if context.dma_occurred {
         context.uart.puts("[main] DMA trans done.\n");
     }
 }

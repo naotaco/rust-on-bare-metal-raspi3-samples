@@ -585,7 +585,7 @@ impl core::ops::Deref for DMAC4 {
 }
 
 pub struct DMAC4 {
-    fired: [OptionalCell<bool>; 16],
+    occurred: [OptionalCell<bool>; 16],
 }
 
 impl crate::exception::InterruptionSource for DMAC4 {
@@ -593,7 +593,7 @@ impl crate::exception::InterruptionSource for DMAC4 {
         for ch in 0..=15 {
             if self.is_interrupt_pending(ch) {
                 self.clear_interrupt(ch);
-                self.fired[ch].insert(Some(true));
+                self.occurred[ch].insert(Some(true));
             }
         }
     }
@@ -603,7 +603,7 @@ impl crate::exception::InterruptionSource for DMAC4 {
 impl DMAC4 {
     pub fn new() -> DMAC4 {
         DMAC4 {
-            fired: arr_macro::arr![OptionalCell::empty(); 16],
+            occurred: arr_macro::arr![OptionalCell::empty(); 16],
         }
     }
     fn ptr() -> *const RegisterBlock {
@@ -722,12 +722,12 @@ impl DMAC4 {
         self.INT_STATUS.read(GLOBAL_INT::STATUS) & (1 << ch as u32) != 0
     }
 
-    pub fn has_fired(&self, ch: usize) -> bool {
+    pub fn occurred(&self, ch: usize) -> bool {
         if ch > 15 {
             return false;
         }
 
-        match self.fired[ch].take() {
+        match self.occurred[ch].take() {
             Some(f) => f,
             None => false,
         }

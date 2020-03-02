@@ -7,7 +7,7 @@ use register::{
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
 pub struct TIMER {
-    fired: [OptionalCell<bool>; 4],
+    occurred: [OptionalCell<bool>; 4],
 }
 
 #[allow(non_snake_case)]
@@ -62,7 +62,7 @@ impl crate::exception::InterruptionSource for TIMER {
         for ch in 0..=3 {
             if self.is_match(ch) {
                 self.clear(ch);
-                self.fired[ch as usize].set(true);
+                self.occurred[ch as usize].set(true);
             }
         }
     }
@@ -72,7 +72,7 @@ impl crate::exception::InterruptionSource for TIMER {
 impl TIMER {
     pub fn new() -> TIMER {
         TIMER {
-            fired: arr_macro::arr![OptionalCell::empty();4],
+            occurred: arr_macro::arr![OptionalCell::empty();4],
         }
     }
 
@@ -122,10 +122,10 @@ impl TIMER {
         self.CS.write(m);
     }
 
-    pub fn has_fired(&self, ch: usize) -> bool {
+    pub fn occurred(&self, ch: usize) -> bool {
         match ch {
             // take() returns a value and leave None.
-            0 | 1 | 2 | 3 => match self.fired[ch].take() {
+            0 | 1 | 2 | 3 => match self.occurred[ch].take() {
                 Some(v) => v,
                 None => false,
             },
