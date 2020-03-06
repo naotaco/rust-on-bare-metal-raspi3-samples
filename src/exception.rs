@@ -1,0 +1,261 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
+// Copyright (c) 2018-2020 Andre Richter <andre.o.richter@gmail.com>
+
+//! Exception handling.
+#![feature(global_asm)]
+#![feature(asm)]
+
+use crate::uart;
+use core::fmt;
+use cortex_a::{asm, barrier, regs::*};
+use register::{
+    cpu::RegisterReadOnly,
+    mmio::{ReadOnly, ReadWrite, WriteOnly},
+    register_bitfields,
+};
+
+// Assembly counterpart to this file.
+global_asm!(include_str!("exception.S"));
+
+/// Wrapper struct for memory copy of SPSR_EL1.
+#[repr(transparent)]
+struct SpsrEL1(ReadWrite<u32, SPSR_EL1::Register>);
+
+/// The exception context as it is stored on the stack on exception entry.
+#[repr(C)]
+struct ExceptionContext {
+    // General Purpose Registers.
+    gpr: [u64; 30],
+    // The link register, aka x30.
+    lr: u64,
+    // Exception link register. The program counter at the time the exception happened.
+    elr_el1: u64,
+    // Saved program status.
+    spsr_el1: SpsrEL1,
+}
+
+/// Wrapper struct for pretty printing ESR_EL1.
+struct EsrEL1;
+
+//--------------------------------------------------------------------------------------------------
+// Exception vector implementation
+//--------------------------------------------------------------------------------------------------
+
+const TEST_OUT: u32 = 0x400_0000;
+static mut exception_count: u32 = 0;
+
+const DMA_CH0_CONT: u32 = 0x3F00_7000;
+
+/// Print verbose information about the exception and the panic.
+fn default_exception_handler(e: &ExceptionContext) {
+    let lr = e.lr;
+    let uart = uart::Uart::new();
+    unsafe {
+        uart.puts("At exception handler from 0x");
+        uart.hex(lr as u32);
+        uart.puts("\n");
+    }
+}
+
+/// Print verbose information about the exception and the panic.
+fn irq_handler(e: &ExceptionContext) {
+    let lr = e.lr;
+    let uart = uart::Uart::new();
+    unsafe {
+        uart.puts("IRQ handler from 0x");
+        uart.hex(lr as u32);
+        uart.puts("\n");
+
+        let int = crate::interrupt::Interrupt::new();
+        let pend = int.GetRawPending();
+        for id in 0..63 {
+            if (pend & (1 << id)) != 0 {
+                match id {
+                    crate::interrupt::Interrupt::INT_NO_DMA => {
+                        uart.puts("Clear DMA int.\n");
+                        *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
+                    }
+                    _ => {
+                        uart.puts("Unknown int: ");
+                        uart.hex(id);
+                        uart.puts("\n");
+                    }
+                }
+            }
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+// Current, EL0
+//--------------------------------------------------------------------------------------------------
+
+#[no_mangle]
+unsafe extern "C" fn current_el0_synchronous(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn current_el0_irq(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn current_el0_serror(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+//--------------------------------------------------------------------------------------------------
+// Current, ELx
+//--------------------------------------------------------------------------------------------------
+
+/// Asynchronous exception taken from the current EL, using SP of the current EL.
+#[no_mangle]
+unsafe extern "C" fn current_elx_synchronous(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn current_elx_irq(e: &mut ExceptionContext) {
+    irq_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn current_elx_serror(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+//--------------------------------------------------------------------------------------------------
+// Lower, AArch64
+//--------------------------------------------------------------------------------------------------
+
+#[no_mangle]
+unsafe extern "C" fn lower_aarch64_synchronous(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn lower_aarch64_irq(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn lower_aarch64_serror(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+//--------------------------------------------------------------------------------------------------
+// Lower, AArch32
+//--------------------------------------------------------------------------------------------------
+
+#[no_mangle]
+unsafe extern "C" fn lower_aarch32_synchronous(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn lower_aarch32_irq(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+#[no_mangle]
+unsafe extern "C" fn lower_aarch32_serror(e: &mut ExceptionContext) {
+    default_exception_handler(e);
+}
+
+/// Set the exception vector base address register.
+///
+/// # Safety
+///
+/// - The vector table and the symbol `__exception_vector_table_start` from the linker script must
+///   adhere to the alignment and size constraints demanded by the AArch64 spec.
+pub unsafe fn set_vbar_el1() -> u64 {
+    // Provided by exception.S.
+    extern "C" {
+        static mut __exception_vector_start: u64;
+    }
+    let addr: u64 = &__exception_vector_start as *const _ as u64;
+
+    VBAR_EL1.set(addr);
+
+    // Force VBAR update to complete before next instruction.
+    barrier::isb(barrier::SY);
+
+    addr
+}
+
+pub trait DaifField {
+    fn daif_field() -> register::Field<u32, DAIF::Register>;
+}
+
+pub struct Debug;
+pub struct SError;
+pub struct IRQ;
+pub struct FIQ;
+
+impl DaifField for Debug {
+    fn daif_field() -> register::Field<u32, DAIF::Register> {
+        DAIF::D
+    }
+}
+
+impl DaifField for SError {
+    fn daif_field() -> register::Field<u32, DAIF::Register> {
+        DAIF::A
+    }
+}
+
+impl DaifField for IRQ {
+    fn daif_field() -> register::Field<u32, DAIF::Register> {
+        DAIF::I
+    }
+}
+
+impl DaifField for FIQ {
+    fn daif_field() -> register::Field<u32, DAIF::Register> {
+        DAIF::F
+    }
+}
+
+pub fn is_masked<T: DaifField>() -> bool {
+    DAIF.is_set(T::daif_field())
+}
+
+#[inline(always)]
+pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
+    HCR_EL2.write(HCR_EL2::RW::EL1IsAarch64);
+
+    // Set up a simulated exception return.
+    //
+    // First, fake a saved program status, where all interrupts were masked and SP_EL1 was used as a
+    // stack pointer.
+    SPSR_EL2.write(
+        SPSR_EL2::D::Masked
+            + SPSR_EL2::A::Masked
+            + SPSR_EL2::I::Masked
+            + SPSR_EL2::F::Masked
+            + SPSR_EL2::M::EL1h,
+    );
+
+    // Second, let the link register point to init().
+    ELR_EL2.set(addr);
+
+    // Set up SP_EL1 (stack pointer), which will be used by EL1 once we "return" to it.
+    SP_EL1.set(0x80000);
+
+    // Use `eret` to "return" to EL1. This will result in execution of `reset()` in EL1.
+    asm::eret()
+}
+
+// https://qiita.com/eggman/items/fd7b2907da71e65b8580
+
+const GPU_INTERRUPTS_ROUTING: u32 = 0x4000000C;
+const IRQ_ENABLE1: u32 = 0x3F00B210;
+
+const CORE0_INTERRUPT_SOURCE: u32 = 0x40000060;
+
+pub unsafe fn SetIrqSourceToCore0() {
+    *(GPU_INTERRUPTS_ROUTING as *mut u32) = 0; // use core0
+    *(IRQ_ENABLE1 as *mut u32) = 1 << 16;
+}

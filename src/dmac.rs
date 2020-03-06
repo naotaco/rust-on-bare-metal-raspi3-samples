@@ -1,6 +1,10 @@
+use super::MMIO_BASE;
 use core::ops::{Deref, DerefMut};
-use core::sync::atomic::compiler_fence;
-use register::{mmio::ReadWrite, register_bitfields};
+use core::sync::atomic::{compiler_fence, fence, Ordering::Release};
+use register::{
+    mmio::{ReadOnly, ReadWrite, WriteOnly},
+    register_bitfields, InMemoryRegister,
+};
 
 pub struct DMAC {
     _some_data: u32,
@@ -337,9 +341,9 @@ impl ControlBlock {
     }
 }
 
-const DMAC_BASE: u32 = super::MMIO_BASE + 0x7200;
+const DMAC_BASE: u32 = super::MMIO_BASE + 0x7000;
 
-impl Deref for DMAC {
+impl core::ops::Deref for DMAC {
     type Target = RegisterBlock;
 
     fn deref(&self) -> &Self::Target {
@@ -433,14 +437,14 @@ pub struct RegisterDMAC2 {
     SOME_DATA: u32,
 }
 
-impl Deref for DMAC2 {
+impl core::ops::Deref for DMAC2 {
     type Target = RegisterDMAC2;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.ptr() }
     }
 }
 
-impl DerefMut for DMAC2 {
+impl core::ops::DerefMut for DMAC2 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.ptr() }
     }
@@ -489,7 +493,7 @@ pub struct DmaChannelRegister3 {
     __reserved: [u32; 0x37],                      // padding~ 0x100
 }
 
-impl Deref for DMAC3 {
+impl core::ops::Deref for DMAC3 {
     type Target = RegisterBlock3;
 
     fn deref(&self) -> &Self::Target {
@@ -517,22 +521,21 @@ impl DMAC3 {
 /// Data structure used to order DMA settings/options.
 /// Write data on DDR accordingly and tell it's address to DMA.
 /// Values ordered by these members can be observed on register as comment follows.
-#[allow(non_snake_case)]
 #[repr(C, align(32))]
 pub struct ControlBlock4 {
-    pub TI: ReadWrite<u32, TI::Register>, // 0x00, accociated to TI register.
-    pub source_address: u32,              // 0x04, SOURCE_AD
-    pub destination_address: u32,         // 0x08, DEST_AD
-    pub transfer_length: u32,             // 0x0C, TXFR_LEN
-    pub two_d_mode_stride: u32,           // 0x10, STRIDE
-    pub next_control_block_address: u32,  // 0x14, NEXTCONBK
-    __reserved: [u32; 2],                 // N/A
+    pub TI: InMemoryRegister<u32, TI::Register>, // 0x00, accociated to TI register.
+    pub source_address: u32,                     // 0x04, SOURCE_AD
+    pub destination_address: u32,                // 0x08, DEST_AD
+    pub transfer_length: u32,                    // 0x0C, TXFR_LEN
+    pub two_d_mode_stride: u32,                  // 0x10, STRIDE
+    pub next_control_block_address: u32,         // 0x14, NEXTCONBK
+    __reserved: [u32; 2],                        // N/A
 }
 
 impl ControlBlock4 {
     pub fn new(src: u32, dest: u32, length: u32, burst: u8) -> ControlBlock4 {
         let cb = ControlBlock4 {
-            TI: ReadWrite::<u32, TI::Register>::new(0),
+            TI: InMemoryRegister::<u32, TI::Register>::new(0),
             source_address: src,
             destination_address: dest,
             transfer_length: length,
@@ -541,7 +544,7 @@ impl ControlBlock4 {
             __reserved: [0; 2],
         };
 
-        match burst {
+        let burst = match burst {
             2 => {
                 cb.TI.modify(
                     TI::BURST_LENGTH::Burst2
@@ -573,12 +576,13 @@ impl ControlBlock4 {
             _ => cb.TI.modify(TI::BURST_LENGTH::Single),
         };
 
-        cb.TI.modify(TI::DEST_INC::Enabled + TI::SRC_INC::Enabled);
+        cb.TI
+            .modify(TI::DEST_INC::Enabled + TI::SRC_INC::Enabled + TI::INTEN::Enabled);
         cb
     }
 }
 
-impl Deref for DMAC4 {
+impl core::ops::Deref for DMAC4 {
     type Target = RegisterBlock;
 
     fn deref(&self) -> &Self::Target {

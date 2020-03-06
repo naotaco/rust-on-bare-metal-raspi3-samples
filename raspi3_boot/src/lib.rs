@@ -27,6 +27,7 @@
 #![deny(warnings)]
 #![no_std]
 #![feature(global_asm)]
+#![feature(asm)]
 
 //! Low-level boot of the Raspberry's processor
 
@@ -37,9 +38,9 @@ extern crate panic_abort;
 macro_rules! entry {
     ($path:path) => {
         #[export_name = "main"]
-        pub unsafe fn __main() -> ! {
+        pub unsafe fn __main() {
             // type check the given path
-            let f: fn() -> ! = $path;
+            let f: fn() = $path;
 
             f()
         }
@@ -69,3 +70,13 @@ pub unsafe extern "C" fn reset() -> ! {
 
 // Disable all cores except core 0, and then jump to reset()
 global_asm!(include_str!("boot_cores.S"));
+
+extern "C" {
+    fn _enable_irq();
+}
+
+/// Something here.
+pub unsafe fn enable_irq() {
+    // _enable_irq();
+    asm!("msr daifclr, #2");
+}

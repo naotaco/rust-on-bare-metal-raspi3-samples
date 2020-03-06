@@ -26,12 +26,16 @@
 #![no_std]
 #![no_main]
 #![feature(asm)]
+#![feature(global_asm)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
 mod arm_debug;
+mod arm_timer;
 mod dmac;
+mod exception;
 mod gpio;
+mod interrupt;
 mod mbox;
 mod timer;
 mod uart;
@@ -136,11 +140,17 @@ fn run_trans_test(
     uart.puts("\n");
 }
 
-fn kernel_entry() -> ! {
-    arm_debug::setup_debug();
+fn kernel_entry() {
+    unsafe {
+        exception::el2_to_el1_transition(user_main as *const () as u64);
+    }
+}
 
+fn user_main() -> ! {
+    arm_debug::setup_debug();
     let uart = uart::Uart::new();
     let mut mbox = mbox::Mbox::new();
+    let gpio = gpio::GPIO::new();
 
     // set up serial console
     match uart.init(&mut mbox) {
@@ -149,6 +159,14 @@ fn kernel_entry() -> ! {
             unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
         },
     }
+
+    unsafe {
+        let addr = exception::set_vbar_el1();
+        let intc = interrupt::Interrupt::new();
+        intc.EnableIrq(crate::interrupt::Interrupt::INT_NO_DMA);
+        raspi3_boot::enable_irq();
+    }
+
     // Section 2.4, 2.5
     let src = 0x200_0000;
     let dest = 0x300_0000;
@@ -169,16 +187,29 @@ fn kernel_entry() -> ! {
     // ControlBlockのアドレスを設定して実行
     d4.exec(0, &cb);
 
-    /*
-    run_trans_test(&gpio, &uart, src, dest, size / 0x100, 0, false);
-    run_trans_test(&gpio, &uart, src, dest, size, 0, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 2, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 4, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 8, true);
-    run_trans_test(&gpio, &uart, src, dest, size, 16, true);
-    */
-
     dump(dest, size, &uart);
+
+    // let a = 10 - 9 - 1;
+    // let b = 11 / a;
+    // uart.hex(b);
+
+    // let timer = timer::TIMER::new();
+    // let current = timer.get_counter32();
+    // let duration = 100_0000; // maybe 1sec.
+    // timer.set_c1(duration + current);
+    // uart.hex(current);
+    // uart.hex(duration);
+    // loop {
+    //     if timer.is_match_c1() {
+    //         uart.puts("Matched!");
+    //         break;
+    //     }
+    // }
+
+    // let arm_timer = arm_timer::ArmTimer::new();
+    // arm_timer.StartFreeRun();
+    // arm_timer.EnableInt();
+    // arm_timer.SetCountDown(1000000);
 
     loop {}
 }

@@ -7,7 +7,8 @@ edition = "2018"
 [dependencies]
 raspi3_boot = { path = "raspi3_boot" }
 nt_allocator = { git = "https://github.com/naotaco/nt-global-alloc-rs.git" }
-register = "0.3.2"
+register = "0.4.0"
+cortex-a = { version = "2.8.x"}
 static_assertions = "0.3.3"
 
 [package.metadata.cargo-xbuild]
