@@ -1,105 +1,21 @@
-//! Interrupts
-
-use core::cell::UnsafeCell;
-
-use super::MMIO_BASE;
-use core::ops::{Deref, DerefMut};
 use register::{
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
+    mmio::{ReadOnly, ReadWrite},
     register_bitfields,
 };
 
-/// A "mutex" based on critical sections
-pub struct Mutex<T> {
-    inner: UnsafeCell<T>,
-}
-
-impl<T> Mutex<T> {
-    /// Creates a new mutex
-    pub const fn new(value: T) -> Self {
-        Mutex {
-            inner: UnsafeCell::new(value),
-        }
-    }
-}
-
-impl<T> Mutex<T> {
-    /// Borrows the data for the duration of the critical section
-    pub fn borrow<'cs>(&self, _ctxt: &'cs CriticalSection) -> &'cs T {
-        unsafe { &*self.inner.get() }
-    }
-}
-
-/// Interrupt number
-pub unsafe trait Nr {
-    /// Returns the number associated with this interrupt
-    fn nr(&self) -> u8;
-}
-
-// NOTE `Mutex` can be used as a channel so, the protected data must be `Send`
-// to prevent sending non-Sendable stuff (e.g. interrupt tokens) across
-// different execution contexts (e.g. interrupts)
-unsafe impl<T> Sync for Mutex<T> where T: Send {}
-
-/// Disables all interrupts
-#[inline(always)]
-pub fn disable() {
-    unsafe {
-        asm!("msr daifset, #2"
-                 :
-                 :
-                 :
-                 : "volatile");
-    }
-}
-
-/// Enables all the interrupts
-///
-/// # Safety
-///
-/// - Do not call this function inside an `interrupt::free` critical section
-#[inline(always)]
-pub unsafe fn enable() {
-    asm!("msr daifclr, #2" // to clear only "I" bit.
-                 :
-                 :
-                 :
-                 : "volatile");
-}
-
-// https://gist.github.com/heechul/3018642
-
-pub unsafe fn test() {
-    asm!("ldxr x0, [x1]"); // load exclusive
-}
-
-/// Critical section context
-///
-/// Indicates that you are executing code within a critical section
-pub struct CriticalSection {
-    _0: (),
-}
-
-/// Execute closure `f` in an interrupt-free context.
-///
-/// This as also known as a "critical section".
-pub fn free<F, R>(f: F) -> R
-where
-    F: FnOnce(&CriticalSection) -> R,
-{
-    // disable interrupts
-    disable();
-
-    let r = f(&CriticalSection { _0: () });
-
-    // If the interrupts were active before our `disable` call, then re-enable
-    // them. Otherwise, keep them disabled
-    unsafe { enable() }
-
-    r
-}
-
 const INTC_BASE: u32 = super::MMIO_BASE + 0xB200;
+
+pub struct InterruptId {}
+impl InterruptId {
+    pub const DMA: u32 = 16;
+    pub const TIMER1: u32 = 1;
+    pub const TIMER3: u32 = 1;
+}
+
+pub struct BasicInterruptId {}
+impl BasicInterruptId {
+    pub const ARM_TIMER: u32 = 0;
+}
 
 pub struct Interrupt {}
 
@@ -162,8 +78,8 @@ impl core::ops::Deref for Interrupt {
     }
 }
 
+#[allow(dead_code)]
 impl Interrupt {
-    pub const INT_NO_DMA: u32 = 16;
     pub fn new() -> Interrupt {
         Interrupt {}
     }
@@ -172,13 +88,13 @@ impl Interrupt {
         INTC_BASE as *const _
     }
 
-    pub fn GetRawPending(&self) -> u64 {
+    pub fn get_raw_pending(&self) -> u64 {
         let l = self.IRQ_PENDING[0].get();
         let h = self.IRQ_PENDING[1].get();
         return ((h as u64) << (32 as u64)) + l as u64;
     }
 
-    pub fn EnableIrq(&self, id: u32) {
+    pub fn enable_irq(&self, id: u32) {
         if id < 32 {
             self.ENABLE_IRQ[0].set(1 << id);
         } else if id < 64 {
@@ -188,7 +104,7 @@ impl Interrupt {
         }
     }
 
-    pub fn DisableIrq(&self, id: u32) {
+    pub fn disable_irq(&self, id: u32) {
         if id < 32 {
             self.DISABLE_IRQ[0].set(1 << id);
         } else if id < 64 {
@@ -198,7 +114,7 @@ impl Interrupt {
         }
     }
 
-    pub fn IsIrqPending(&self, id: u32) -> bool {
+    pub fn is_irq_enabled(&self, id: u32) -> bool {
         if id < 32 {
             (self.IRQ_PENDING[0].get() & (1 << id)) != 0
         } else if id < 64 {
@@ -206,5 +122,34 @@ impl Interrupt {
         } else {
             return false;
         }
+    }
+
+    pub fn enable_basic_irq(&self, id: u32) {
+        if id < 8 {
+            self.ENABLE_BASIC_IRQ.set(1 << id);
+        }
+    }
+
+    pub fn disable_basic_irq(&self, id: u32) {
+        if id < 8 {
+            self.DISABLE_BASIC_IRQ.set(1 << id);
+        }
+    }
+
+    pub fn is_basic_irq_pending(&self, id: u32) -> bool {
+        if id < 8 {
+            return (self.BASIC_PENDING.get() & (1 << id)) != 0;
+        }
+
+        false
+    }
+
+    pub fn is_any_irq_pending(&self) -> bool {
+        self.BASIC_PENDING.is_set(BASIC_PENDING::PENDING_0)
+            || self.BASIC_PENDING.is_set(BASIC_PENDING::PENDING_1)
+    }
+
+    pub fn get_raw_basic_pending(&self) -> u32 {
+        self.BASIC_PENDING.get()
     }
 }

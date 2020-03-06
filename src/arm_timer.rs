@@ -1,5 +1,4 @@
-use super::MMIO_BASE;
-use core::ops::{Deref, DerefMut};
+use crate::optional_cell::OptionalCell;
 use register::{
     mmio::{ReadOnly, ReadWrite, WriteOnly},
     register_bitfields,
@@ -7,7 +6,9 @@ use register::{
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0xB400;
 
-pub struct ArmTimer {}
+pub struct ArmTimer {
+    occurred: OptionalCell<bool>,
+}
 
 #[allow(non_snake_case)]
 #[repr(C)]
@@ -73,38 +74,61 @@ impl core::ops::Deref for ArmTimer {
     }
 }
 
+const BASIC_INT_NO_ARM_TIMER: u32 = 0;
+
+impl crate::exception::InterruptionSource for ArmTimer {
+    fn on_interruption(&self, id: u32) {
+        if id == BASIC_INT_NO_ARM_TIMER {
+            self.clear_irq();
+            self.occurred.insert(Some(true));
+        }
+    }
+}
+
+#[allow(dead_code)]
 impl ArmTimer {
     pub fn new() -> ArmTimer {
-        let t = ArmTimer {};
-        t.Enable();
-        t
+        ArmTimer {
+            occurred: OptionalCell::new(false),
+        }
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
     }
 
-    fn Enable(&self) {
+    pub fn enable(&self) {
         self.CONTROL.modify(CONTROL::ENABLED::Enabled);
     }
 
-    pub fn StartFreeRun(&self) {
+    pub fn start_free_run(&self) {
         self.CONTROL
             .modify(CONTROL::FREE_RUN::Enabled + CONTROL::BIT_WIDTH::BIT_23);
     }
 
-    pub fn ReadFreeFun(&self) -> u32 {
+    pub fn read_free_run(&self) -> u32 {
         self.FREE_RUN_COUNTER.get()
     }
 
-    pub fn SetCountDown(&self, t: u32) {
+    pub fn set_count_down(&self, t: u32) {
         self.LOAD.set(t);
     }
 
-    pub fn ReadCountDown(&self) -> u32 {
+    pub fn read_count_down(&self) -> u32 {
         self.VALUE.get()
     }
 
-    pub fn EnableInt(&self) {
+    pub fn enable_int(&self) {
         self.CONTROL.modify(CONTROL::INT_EN::Enabled);
+    }
+
+    pub fn clear_irq(&self) {
+        self.IRQ_CLEAR.set(1);
+    }
+
+    pub fn occurred(&self) -> bool {
+        match self.occurred.take() {
+            Some(f) => f,
+            None => false,
+        }
     }
 }

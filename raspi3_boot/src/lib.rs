@@ -75,8 +75,22 @@ extern "C" {
     fn _enable_irq();
 }
 
-/// Something here.
+/// Enable irq at CPU.
 pub unsafe fn enable_irq() {
-    // _enable_irq();
     asm!("msr daifclr, #2");
+}
+
+/// Disable irq
+pub unsafe fn disable_irq() {
+    asm!("msr daifset, #2");
+}
+
+/// Sleep CPU
+pub unsafe fn wfe() {
+    asm!("wfe");
+}
+
+/// sleep CPU until interrupt
+pub unsafe fn wfi() {
+    asm!("wfi");
 }

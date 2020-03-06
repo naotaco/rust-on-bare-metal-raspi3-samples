@@ -1,13 +1,14 @@
-use super::MMIO_BASE;
-use core::ops::{Deref, DerefMut};
+use crate::optional_cell::OptionalCell;
 use register::{
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
+    mmio::{ReadOnly, ReadWrite},
     register_bitfields,
 };
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
-pub struct TIMER {}
+pub struct TIMER {
+    occurred: [OptionalCell<bool>; 4],
+}
 
 #[allow(non_snake_case)]
 #[repr(C)]
@@ -56,10 +57,25 @@ impl core::ops::Deref for TIMER {
     }
 }
 
+impl crate::exception::InterruptionSource for TIMER {
+    fn on_interruption(&self, _id: u32) {
+        for ch in 0..=3 {
+            if self.is_match(ch) {
+                self.clear(ch);
+                self.occurred[ch as usize].set(true);
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
 impl TIMER {
     pub fn new() -> TIMER {
-        TIMER {}
+        TIMER {
+            occurred: arr_macro::arr![OptionalCell::empty();4],
+        }
     }
+
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
     }
@@ -73,22 +89,47 @@ impl TIMER {
         self.CLO.read(CLO::TIME)
     }
 
-    pub fn set_c1(&self, t: u32) {
-        self.C1.set(t);
+    pub fn set(&self, ch: u32, t: u32) {
+        let r = match ch {
+            0 => &self.C0,
+            1 => &self.C1,
+            2 => &self.C2,
+            3 => &self.C3,
+            _ => return,
+        };
+        r.set(t);
     }
 
-    pub fn set_c3(&self, t: u32) {
-        self.C3.set(t);
+    pub fn is_match(&self, ch: u32) -> bool {
+        let m = match ch {
+            0 => CS::M0,
+            1 => CS::M1,
+            2 => CS::M2,
+            3 => CS::M3,
+            _ => return false,
+        };
+        self.CS.is_set(m)
     }
 
-    pub fn is_match_c1(&self) -> bool {
-        //self.CS.read(CS::M1) == CS::M1::Match
-        self.CS.is_set(CS::M1)
-        // let a: u32 = CS::M1::Match;
-        // == CS::M1::Match;
+    fn clear(&self, ch: u32) {
+        let m = match ch {
+            0 => CS::M0::Match,
+            1 => CS::M1::Match,
+            2 => CS::M2::Match,
+            3 => CS::M3::Match,
+            _ => return,
+        };
+        self.CS.write(m);
     }
 
-    pub fn is_match_c3(&self) -> bool {
-        self.CS.is_set(CS::M3)
+    pub fn occurred(&self, ch: usize) -> bool {
+        match ch {
+            // take() returns a value and leave None.
+            0 | 1 | 2 | 3 => match self.occurred[ch].take() {
+                Some(v) => v,
+                None => false,
+            },
+            _ => false,
+        }
     }
 }

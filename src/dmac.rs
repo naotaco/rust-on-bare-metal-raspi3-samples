@@ -1,10 +1,6 @@
-use super::MMIO_BASE;
-use core::ops::{Deref, DerefMut};
-use core::sync::atomic::{compiler_fence, fence, Ordering::Release};
-use register::{
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
-    register_bitfields, InMemoryRegister,
-};
+use crate::optional_cell::OptionalCell;
+use core::sync::atomic::compiler_fence;
+use register::{mmio::ReadWrite, register_bitfields, InMemoryRegister};
 
 pub struct DMAC {
     _some_data: u32,
@@ -20,9 +16,9 @@ pub struct RegisterBlock {
     ENABLE: ReadWrite<u32, GLOBAL_ENABLE::Register>, // 0xff0
 }
 
+/// Only for ch 0-6. from 7th ch, differenct map is assigned.
 #[allow(non_snake_case)]
 #[repr(C)]
-/// Only for ch 0-6. from 7th ch, differenct map is assigned.
 pub struct DmaChannelRegister {
     CS: ReadWrite<u32, CS::Register>,             // 0x00, Status
     CONBLK_AD: ReadWrite<u32>,                    // 0x04, Control block address
@@ -228,22 +224,7 @@ register_bitfields! {
     ],
     GLOBAL_INT[
         // 31-16: reserved.
-        INT15 OFFSET(15) NUMBITS(1) [],
-        INT14 OFFSET(14) NUMBITS(1) [],
-        INT13 OFFSET(13) NUMBITS(1) [],
-        INT12 OFFSET(12) NUMBITS(1) [],
-        INT11 OFFSET(11) NUMBITS(1) [],
-        INT10 OFFSET(10) NUMBITS(1) [],
-        INT9 OFFSET(9) NUMBITS(1) [],
-        INT8 OFFSET(8) NUMBITS(1) [],
-        INT7 OFFSET(7) NUMBITS(1) [],
-        INT6 OFFSET(6) NUMBITS(1) [],
-        INT5 OFFSET(5) NUMBITS(1) [],
-        INT4 OFFSET(4) NUMBITS(1) [],
-        INT3 OFFSET(3) NUMBITS(1) [],
-        INT2 OFFSET(2) NUMBITS(1) [],
-        INT1 OFFSET(1) NUMBITS(1) [],
-        INT0 OFFSET(0) NUMBITS(1) []
+        STATUS OFFSET(0) NUMBITS(16)[]
     ],
     GLOBAL_ENABLE[
         ENABLE15 OFFSET(15) NUMBITS(1) [
@@ -327,8 +308,9 @@ pub struct ControlBlock {
     __reserved: [u32; 2],                // N/A
 }
 
+#[allow(dead_code)]
 impl ControlBlock {
-    pub fn new(src: u32) -> ControlBlock {
+    pub fn new(_src: u32) -> ControlBlock {
         ControlBlock {
             transfer_information: (1 << 8) + (1 << 4),
             source_address: 0x100_0160,
@@ -343,6 +325,7 @@ impl ControlBlock {
 
 const DMAC_BASE: u32 = super::MMIO_BASE + 0x7000;
 
+#[allow(dead_code)]
 impl core::ops::Deref for DMAC {
     type Target = RegisterBlock;
 
@@ -351,6 +334,7 @@ impl core::ops::Deref for DMAC {
     }
 }
 
+#[allow(dead_code)]
 impl DMAC {
     pub fn new() -> DMAC {
         DMAC { _some_data: 0 }
@@ -396,6 +380,8 @@ impl DMAC {
 }
 
 pub struct DMAC0 {}
+
+#[allow(dead_code)]
 impl DMAC0 {
     pub fn write_data() {
         unsafe {
@@ -415,6 +401,7 @@ pub struct DmacRegs {
              // ...
 }
 
+#[allow(dead_code)]
 impl DMAC1 {
     pub fn write_data() {
         const BASE: u32 = 0x3F00_7200;
@@ -437,6 +424,7 @@ pub struct RegisterDMAC2 {
     SOME_DATA: u32,
 }
 
+#[allow(dead_code)]
 impl core::ops::Deref for DMAC2 {
     type Target = RegisterDMAC2;
     fn deref(&self) -> &Self::Target {
@@ -444,12 +432,14 @@ impl core::ops::Deref for DMAC2 {
     }
 }
 
+#[allow(dead_code)]
 impl core::ops::DerefMut for DMAC2 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.ptr() }
     }
 }
 
+#[allow(dead_code)]
 impl DMAC2 {
     fn ptr(&self) -> *mut RegisterDMAC2 {
         self.base_addr as *mut _
@@ -493,6 +483,7 @@ pub struct DmaChannelRegister3 {
     __reserved: [u32; 0x37],                      // padding~ 0x100
 }
 
+#[allow(dead_code)]
 impl core::ops::Deref for DMAC3 {
     type Target = RegisterBlock3;
 
@@ -503,6 +494,7 @@ impl core::ops::Deref for DMAC3 {
 
 pub struct DMAC3 {}
 
+#[allow(dead_code)]
 impl DMAC3 {
     pub fn new() -> DMAC3 {
         DMAC3 {}
@@ -522,6 +514,7 @@ impl DMAC3 {
 /// Write data on DDR accordingly and tell it's address to DMA.
 /// Values ordered by these members can be observed on register as comment follows.
 #[repr(C, align(32))]
+#[allow(non_snake_case)]
 pub struct ControlBlock4 {
     pub TI: InMemoryRegister<u32, TI::Register>, // 0x00, accociated to TI register.
     pub source_address: u32,                     // 0x04, SOURCE_AD
@@ -532,6 +525,7 @@ pub struct ControlBlock4 {
     __reserved: [u32; 2],                        // N/A
 }
 
+#[allow(dead_code)]
 impl ControlBlock4 {
     pub fn new(src: u32, dest: u32, length: u32, burst: u8) -> ControlBlock4 {
         let cb = ControlBlock4 {
@@ -544,7 +538,7 @@ impl ControlBlock4 {
             __reserved: [0; 2],
         };
 
-        let burst = match burst {
+        match burst {
             2 => {
                 cb.TI.modify(
                     TI::BURST_LENGTH::Burst2
@@ -590,11 +584,27 @@ impl core::ops::Deref for DMAC4 {
     }
 }
 
-pub struct DMAC4 {}
+pub struct DMAC4 {
+    occurred: [OptionalCell<bool>; 16],
+}
 
+impl crate::exception::InterruptionSource for DMAC4 {
+    fn on_interruption(&self, _id: u32) {
+        for ch in 0..=15 {
+            if self.is_interrupt_pending(ch) {
+                self.clear_interrupt(ch);
+                self.occurred[ch].insert(Some(true));
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
 impl DMAC4 {
     pub fn new() -> DMAC4 {
-        DMAC4 {}
+        DMAC4 {
+            occurred: arr_macro::arr![OptionalCell::empty(); 16],
+        }
     }
     fn ptr() -> *const RegisterBlock {
         DMAC_BASE as *const _
@@ -695,5 +705,31 @@ impl DMAC4 {
             return;
         }
         self.Channels[ch].CS.write(CS::END::Clear);
+    }
+
+    pub fn clear_interrupt(&self, ch: usize) {
+        if ch > 15 {
+            return;
+        }
+        self.Channels[ch].CS.write(CS::INT::Clear);
+    }
+
+    pub fn is_interrupt_pending(&self, ch: usize) -> bool {
+        if ch > 15 {
+            return false;
+        }
+
+        self.INT_STATUS.read(GLOBAL_INT::STATUS) & (1 << ch as u32) != 0
+    }
+
+    pub fn occurred(&self, ch: usize) -> bool {
+        if ch > 15 {
+            return false;
+        }
+
+        match self.occurred[ch].take() {
+            Some(f) => f,
+            None => false,
+        }
     }
 }

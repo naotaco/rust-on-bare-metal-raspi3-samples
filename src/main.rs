@@ -27,6 +27,8 @@
 #![no_main]
 #![feature(asm)]
 #![feature(global_asm)]
+#![feature(new_uninit)]
+#![feature(const_fn)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
@@ -37,9 +39,21 @@ mod exception;
 mod gpio;
 mod interrupt;
 mod mbox;
+mod optional_cell;
 mod timer;
 mod uart;
+mod utils;
 
+use nt_allocator::NtGlobalAlloc;
+extern crate alloc;
+
+#[global_allocator]
+static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
+    base: 0x600_0000,
+    size: 0x200_0000,
+};
+
+#[allow(dead_code)]
 fn init(data_addr: u32, size: usize, init_data: u32) {
     for i in 0..size / 4 {
         let p: *mut u32 = (data_addr + (i * 4) as u32) as *mut u32;
@@ -49,6 +63,7 @@ fn init(data_addr: u32, size: usize, init_data: u32) {
     }
 }
 
+#[allow(dead_code)]
 fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
     if size <= 128 {
         for i in 0..size / 4 {
@@ -72,146 +87,187 @@ fn dump(data_addr: u32, size: usize, uart: &uart::Uart) {
     }
 }
 
-fn memcpy_dmac(src: u32, dest: u32, size: usize, burst: u8) {
-    let cb = dmac::ControlBlock4::new(src, dest, size as u32, burst);
-    let d4 = dmac::DMAC4::new();
-    let ch: usize = 0;
-    d4.init();
-    d4.turn_on(ch);
-    d4.exec(ch, &cb);
-    d4.wait_end(ch);
-    d4.clear(ch);
-}
-
-fn memcpy_cpu(src: u32, dest: u32, size: usize) {
-    if src < dest {
-        if src + size as u32 >= dest {
-            return;
-        }
-    } else {
-        if dest + size as u32 >= src {
-            return;
-        }
-    }
-
-    unsafe {
-        core::intrinsics::copy_nonoverlapping(src as *mut u32, dest as *mut u32, size);
-    }
-}
-
-fn print_time(uart: &uart::Uart) {
-    let timer = timer::TIMER::new();
-    uart.puts("time: ");
-    uart.hex(timer.get_counter32());
-    uart.puts("\n");
-}
-
-fn run_trans_test(
-    gpio: &gpio::GPIO,
-    uart: &uart::Uart,
-    src: u32,
-    dest: u32,
-    size: usize,
-    burst: u8,
-    use_dma: bool,
-) {
-    let timer = timer::TIMER::new();
-    let start = timer.get_counter64();
-    gpio.pin5(true);
-    //print_time(&uart);
-    //uart.puts("starting memcpy.\n");
-
-    if use_dma {
-        memcpy_dmac(src, dest, size, burst);
-    } else {
-        memcpy_cpu(src, dest, size);
-    }
-    // memcpy_cpu(src, dest, size);
-
-    gpio.pin5(false);
-    let end = timer.get_counter64();
-
-    uart.puts("done! size: 0x");
-    uart.hex(size as u32);
-    uart.puts(" burst: ");
-    uart.hex(burst as u32);
-    uart.puts(" duration: 0x");
-    uart.hex(((end - start) & 0xFFFF_FFFF) as u32);
-    uart.puts("\n");
-}
-
 fn kernel_entry() {
     unsafe {
         exception::el2_to_el1_transition(user_main as *const () as u64);
     }
 }
 
-fn user_main() -> ! {
+unsafe fn user_main() -> ! {
     arm_debug::setup_debug();
-    let uart = uart::Uart::new();
+
+    //let uart = uart::Uart::new();
+    let uart = static_init!(uart::Uart, uart::Uart::new());
     let mut mbox = mbox::Mbox::new();
-    let gpio = gpio::GPIO::new();
 
     // set up serial console
     match uart.init(&mut mbox) {
         Ok(_) => uart.puts("\n[0] UART is live!\n"),
         Err(_) => loop {
-            unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
+            asm!("wfe" :::: "volatile"); // If UART fails, abort early
         },
     }
 
-    unsafe {
-        let addr = exception::set_vbar_el1();
-        let intc = interrupt::Interrupt::new();
-        intc.EnableIrq(crate::interrupt::Interrupt::INT_NO_DMA);
-        raspi3_boot::enable_irq();
-    }
+    GLOBAL_ALLOCATOR.init();
+
+    let addr = exception::set_vbar_el1();
+    uart.puts("set vbar");
+    uart.hex((addr & 0xFFFF_FFFF) as u32);
+    uart.puts("\n");
 
     // Section 2.4, 2.5
     let src = 0x200_0000;
-    let dest = 0x300_0000;
-    let size = 64;
+    let dest = 0x800_0000;
+    let size = 0x600_0000;
 
     uart.puts("Initializing...\n");
 
-    init(src, size, 0xFF00_0000);
-    init(dest, size, 0x1200_0000);
+    // init(src, size, 0xFF00_0000);
+    // init(dest, size, 0x1200_0000);
 
-    dump(src, size, &uart);
-    dump(dest, size, &uart);
+    // dump(src, size, &uart);
+    // dump(dest, size, &uart);
 
-    // アドレスを渡してControlBlockを初期化.
+    let timer = static_init!(timer::TIMER, timer::TIMER::new());
+    let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
+    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
+
+    // setup irq handlers with drivers that have capability of irq handling.
+    setup_irq_handlers(timer, arm_timer, dma, uart);
+
+    // enable interrupt handling at int controller.
+    let int = interrupt::Interrupt::new();
+    int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
+    uart.puts("Enabling Irq1\n");
+    int.enable_irq(interrupt::InterruptId::TIMER1);
+    int.enable_irq(interrupt::InterruptId::DMA);
+
+    // enable receiving irq at CPU
+    raspi3_boot::enable_irq();
+
+    // timer
+    let current = timer.get_counter32();
+    let duration = 200_0000; // maybe 1sec.
+    uart.puts("Starting timer\n");
+    timer.set(1, duration + current);
+
+    // arm timer
+    arm_timer.enable();
+    arm_timer.start_free_run();
+    arm_timer.enable_int();
+    arm_timer.set_count_down(1000000);
+
+    // dma
     let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
-    let d4 = dmac::DMAC4::new();
-    d4.turn_on(0);
-    // ControlBlockのアドレスを設定して実行
-    d4.exec(0, &cb);
+    dma.turn_on(0);
+    dma.exec(0, &cb);
 
-    dump(dest, size, &uart);
+    // main looooop
+    loop {
+        let mut context = MainTaskContext {
+            timer_occurred: false,
+            arm_timer_occurred: false,
+            dma_occurred: false,
 
-    // let a = 10 - 9 - 1;
-    // let b = 11 / a;
-    // uart.hex(b);
+            timer: &timer,
+            arm_timer: &arm_timer,
+            dma: &dma,
+            uart: &uart,
+        };
 
-    // let timer = timer::TIMER::new();
-    // let current = timer.get_counter32();
-    // let duration = 100_0000; // maybe 1sec.
-    // timer.set_c1(duration + current);
-    // uart.hex(current);
-    // uart.hex(duration);
-    // loop {
-    //     if timer.is_match_c1() {
-    //         uart.puts("Matched!");
-    //         break;
-    //     }
-    // }
+        {
+            // critical section start:
+            raspi3_boot::disable_irq();
 
-    // let arm_timer = arm_timer::ArmTimer::new();
-    // arm_timer.StartFreeRun();
-    // arm_timer.EnableInt();
-    // arm_timer.SetCountDown(1000000);
+            context.timer_occurred = timer.occurred(1);
+            context.arm_timer_occurred = arm_timer.occurred();
+            context.dma_occurred = dma.occurred(0);
 
-    loop {}
+            // critical section end
+            raspi3_boot::enable_irq();
+        }
+
+        // perform main task once.
+        main_task(context);
+
+        // sleep until interrupt.
+        raspi3_boot::wfi();
+    }
 }
 
+#[allow(dead_code)]
+struct MainTaskContext<'a> {
+    timer_occurred: bool,
+    arm_timer_occurred: bool,
+    dma_occurred: bool,
+
+    timer: &'a timer::TIMER,
+    arm_timer: &'a arm_timer::ArmTimer,
+    dma: &'a dmac::DMAC4,
+    uart: &'a uart::Uart,
+}
+
+fn main_task(context: MainTaskContext) {
+    if context.timer_occurred {
+        context.uart.puts("[main] Timer occurred ch1\n");
+        let current = context.timer.get_counter32();
+        let duration = 200_0000; // maybe 1sec.
+        context.timer.set(1, duration + current);
+    }
+    if context.arm_timer_occurred {
+        context.uart.puts("[main] Arm timer occurred\n");
+    }
+    if context.dma_occurred {
+        context.uart.puts("[main] DMA trans done.\n");
+    }
+}
+
+unsafe fn setup_irq_handlers(
+    timer: &'static timer::TIMER,
+    arm_timer: &'static arm_timer::ArmTimer,
+    dma: &'static dmac::DMAC4,
+    uart: &'static uart::Uart,
+) {
+    let timer_int_ids = static_init!(
+        [u32; 2],
+        [
+            interrupt::InterruptId::TIMER1,
+            interrupt::InterruptId::TIMER3
+        ]
+    );
+    let dma_int_ids = static_init!([u32; 1], [interrupt::InterruptId::DMA]);
+    let arm_timer_int_ids = static_init!([u32; 1], [interrupt::BasicInterruptId::ARM_TIMER]);
+
+    let irq_devices = static_init!(
+        [exception::IrqHandler; 2],
+        [
+            exception::IrqHandler::new(timer, timer_int_ids),
+            exception::IrqHandler::new(dma, dma_int_ids)
+        ]
+    );
+
+    let basic_irq_devices = static_init!(
+        [exception::IrqHandler; 1],
+        [exception::IrqHandler::new(arm_timer, arm_timer_int_ids)]
+    );
+
+    let handler_info = static_init!(
+        exception::IrqHandlersSettings,
+        exception::IrqHandlersSettings::new(irq_devices, basic_irq_devices)
+    );
+
+    let register_result = exception::set_irq_handlers(handler_info);
+
+    let debug_context = static_init!(
+        exception::DebugContext,
+        exception::DebugContext::new(optional_cell::OptionalCell::new(uart))
+    );
+
+    let register_result_uart = exception::set_debug_context(debug_context);
+    if register_result && register_result_uart {
+        uart.puts("Successfully registerd handlers!\n");
+    } else {
+        uart.puts("Something wrong in handler registeration\n");
+    }
+}
 raspi3_boot::entry!(kernel_entry);

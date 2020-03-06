@@ -3,17 +3,10 @@
 // Copyright (c) 2018-2020 Andre Richter <andre.o.richter@gmail.com>
 
 //! Exception handling.
-#![feature(global_asm)]
-#![feature(asm)]
 
-use crate::uart;
-use core::fmt;
+use crate::optional_cell::OptionalCell;
 use cortex_a::{asm, barrier, regs::*};
-use register::{
-    cpu::RegisterReadOnly,
-    mmio::{ReadOnly, ReadWrite, WriteOnly},
-    register_bitfields,
-};
+use register::mmio::ReadWrite;
 
 // Assembly counterpart to this file.
 global_asm!(include_str!("exception.S"));
@@ -35,53 +28,134 @@ struct ExceptionContext {
     spsr_el1: SpsrEL1,
 }
 
-/// Wrapper struct for pretty printing ESR_EL1.
-struct EsrEL1;
+pub trait InterruptionSource {
+    fn on_interruption(&self, id: u32);
+}
+
+pub struct IrqHandler {
+    device: &'static dyn InterruptionSource,
+    int_no: &'static [u32],
+}
+
+impl IrqHandler {
+    pub fn new(device: &'static dyn InterruptionSource, int_no: &'static [u32]) -> IrqHandler {
+        IrqHandler { device, int_no }
+    }
+}
+
+pub struct IrqHandlersSettings {
+    pub irq_devices: &'static [IrqHandler],
+    pub basic_irq_devices: &'static [IrqHandler],
+}
+
+impl IrqHandlersSettings {
+    pub fn new(
+        irq_devices: &'static [IrqHandler],
+        basic_irq_devices: &'static [IrqHandler],
+    ) -> IrqHandlersSettings {
+        IrqHandlersSettings {
+            irq_devices,
+            basic_irq_devices,
+        }
+    }
+}
+
+static mut DEVICES: Option<&'static IrqHandlersSettings> = None;
+
+pub trait ConsoleOut {
+    fn puts(&self, s: &str);
+    fn hex(&self, h: u32);
+}
+
+pub struct DebugContext {
+    callback: OptionalCell<&'static dyn ConsoleOut>,
+}
+
+impl DebugContext {
+    pub fn new(callback: OptionalCell<&'static dyn ConsoleOut>) -> DebugContext {
+        DebugContext { callback }
+    }
+}
+
+static mut DEBUG_CONTEXT: Option<&'static DebugContext> = None;
 
 //--------------------------------------------------------------------------------------------------
 // Exception vector implementation
 //--------------------------------------------------------------------------------------------------
+unsafe fn puts(s: &str) {
+    let s2 = ["[Exception] ", s].concat();
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(&s2));
+}
 
-const TEST_OUT: u32 = 0x400_0000;
-static mut exception_count: u32 = 0;
+unsafe fn puts2(s: &str) {
+    let s2 = ["[Exception] ", s].concat();
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(&s2));
+}
 
-const DMA_CH0_CONT: u32 = 0x3F00_7000;
+unsafe fn hex(v: u32) {
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.hex(v));
+}
+
+unsafe fn hexln(v: u32) {
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.hex(v));
+    DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts("\n"));
+}
 
 /// Print verbose information about the exception and the panic.
 fn default_exception_handler(e: &ExceptionContext) {
     let lr = e.lr;
-    let uart = uart::Uart::new();
     unsafe {
-        uart.puts("At exception handler from 0x");
-        uart.hex(lr as u32);
-        uart.puts("\n");
+        puts("At exception handler from 0x");
+        hexln(lr as u32);
     }
 }
 
 /// Print verbose information about the exception and the panic.
 fn irq_handler(e: &ExceptionContext) {
-    let lr = e.lr;
-    let uart = uart::Uart::new();
     unsafe {
-        uart.puts("IRQ handler from 0x");
-        uart.hex(lr as u32);
-        uart.puts("\n");
+        puts("IRQ handler from 0x");
+        hex(e.elr_el1 as u32);
+        puts("\n");
 
         let int = crate::interrupt::Interrupt::new();
-        let pend = int.GetRawPending();
-        for id in 0..63 {
-            if (pend & (1 << id)) != 0 {
-                match id {
-                    crate::interrupt::Interrupt::INT_NO_DMA => {
-                        uart.puts("Clear DMA int.\n");
-                        *(DMA_CH0_CONT as *mut u32) |= (0x1 << 2);
-                    }
-                    _ => {
-                        uart.puts("Unknown int: ");
-                        uart.hex(id);
-                        uart.puts("\n");
+
+        if int.is_any_irq_pending() {
+            let pend = int.get_raw_pending();
+            puts2("IRQ pending: ");
+            hex((pend & 0xFFFF_FFFF) as u32);
+            puts(" ");
+            hexln(((pend >> 32) & 0xFFFF_FFFF) as u32);
+            for id in 0..63 {
+                if (pend & (1 << id)) != 0 {
+                    let devs = DEVICES.unwrap().irq_devices;
+                    for d in devs.iter() {
+                        if d.int_no.contains(&id) {
+                            puts("  from device: ");
+                            hexln(id);
+                            d.device.on_interruption(id);
+                        }
                     }
                 }
+            }
+        } else {
+            let pend = int.get_raw_basic_pending();
+            if pend != 0 {
+                puts("Basic IRQ pending: ");
+                hexln(pend);
+                for id in 0..7 {
+                    if (pend & (1 << id)) != 0 {
+                        let devs = DEVICES.unwrap().basic_irq_devices;
+                        for d in devs.iter() {
+                            if d.int_no.contains(&id) {
+                                puts("  from device: ");
+                                hexln(id);
+                                d.device.on_interruption(id);
+                            }
+                        }
+                    }
+                }
+            } else {
+                puts("Some unknown case...\n");
             }
         }
     }
@@ -164,6 +238,10 @@ unsafe extern "C" fn lower_aarch32_serror(e: &mut ExceptionContext) {
     default_exception_handler(e);
 }
 
+//--------------------------------------------------------------------------------------------------
+// Arch-public
+//--------------------------------------------------------------------------------------------------
+
 /// Set the exception vector base address register.
 ///
 /// # Safety
@@ -185,45 +263,9 @@ pub unsafe fn set_vbar_el1() -> u64 {
     addr
 }
 
-pub trait DaifField {
-    fn daif_field() -> register::Field<u32, DAIF::Register>;
-}
-
-pub struct Debug;
-pub struct SError;
-pub struct IRQ;
-pub struct FIQ;
-
-impl DaifField for Debug {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::D
-    }
-}
-
-impl DaifField for SError {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::A
-    }
-}
-
-impl DaifField for IRQ {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::I
-    }
-}
-
-impl DaifField for FIQ {
-    fn daif_field() -> register::Field<u32, DAIF::Register> {
-        DAIF::F
-    }
-}
-
-pub fn is_masked<T: DaifField>() -> bool {
-    DAIF.is_set(T::daif_field())
-}
-
 #[inline(always)]
 pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
+    // Set EL1 execution state to AArch64.
     HCR_EL2.write(HCR_EL2::RW::EL1IsAarch64);
 
     // Set up a simulated exception return.
@@ -248,14 +290,10 @@ pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
     asm::eret()
 }
 
-// https://qiita.com/eggman/items/fd7b2907da71e65b8580
+pub unsafe fn set_irq_handlers(h: &'static IrqHandlersSettings) -> bool {
+    (*DEVICES.get_or_insert(h)) as *const _ == h
+}
 
-const GPU_INTERRUPTS_ROUTING: u32 = 0x4000000C;
-const IRQ_ENABLE1: u32 = 0x3F00B210;
-
-const CORE0_INTERRUPT_SOURCE: u32 = 0x40000060;
-
-pub unsafe fn SetIrqSourceToCore0() {
-    *(GPU_INTERRUPTS_ROUTING as *mut u32) = 0; // use core0
-    *(IRQ_ENABLE1 as *mut u32) = 1 << 16;
+pub unsafe fn set_debug_context(c: &'static DebugContext) -> bool {
+    (*DEBUG_CONTEXT.get_or_insert(c)) as *const _ == c
 }
