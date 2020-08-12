@@ -27,6 +27,7 @@
 #![deny(warnings)]
 #![no_std]
 #![feature(global_asm)]
+#![feature(llvm_asm)]
 
 //! Low-level boot of the Raspberry's processor
 
@@ -69,3 +70,27 @@ pub unsafe extern "C" fn reset() -> ! {
 
 // Disable all cores except core 0, and then jump to reset()
 global_asm!(include_str!("boot_cores.S"));
+
+extern "C" {
+    fn _enable_irq();
+}
+
+/// Enable irq at CPU.
+pub unsafe fn enable_irq() {
+    llvm_asm!("msr daifclr, #2");
+}
+
+/// Disable irq
+pub unsafe fn disable_irq() {
+    llvm_asm!("msr daifset, #2");
+}
+
+/// Sleep CPU
+pub unsafe fn wfe() {
+    llvm_asm!("wfe");
+}
+
+/// sleep CPU until interrupt
+pub unsafe fn wfi() {
+    asm!("wfi");
+}

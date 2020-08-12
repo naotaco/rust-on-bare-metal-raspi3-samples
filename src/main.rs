@@ -25,7 +25,10 @@
 
 #![no_std]
 #![no_main]
-#![feature(asm)]
+#![feature(global_asm)]
+#![feature(llvm_asm)]
+#![feature(new_uninit)]
+#![feature(const_fn)]
 
 const MMIO_BASE: u32 = 0x3F00_0000;
 
@@ -146,7 +149,9 @@ fn kernel_entry() -> ! {
     match uart.init(&mut mbox) {
         Ok(_) => uart.puts("\n[0] UART is live!\n"),
         Err(_) => loop {
-            unsafe { asm!("wfe" :::: "volatile") }; // If UART fails, abort early
+            unsafe {
+                llvm_asm!("wfe" :::: "volatile");
+            } // If UART fails, abort early
         },
     }
     // Section 2.4, 2.5

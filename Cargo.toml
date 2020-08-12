@@ -7,14 +7,9 @@ edition = "2018"
 [dependencies]
 raspi3_boot = { path = "raspi3_boot" }
 nt_allocator = { git = "https://github.com/naotaco/nt-global-alloc-rs.git" }
-<<<<<<< HEAD
-register = "0.3.2"
-static_assertions = "0.3.3"
-=======
 register = "0.5.x"
 cortex-a = { version = "3.0.x"}
 static_assertions = "1.1.x"
->>>>>>> 5f61357... Bump crates
 
 [package.metadata.cargo-xbuild]
 sysroot_path = "../xbuild_sysroot"
