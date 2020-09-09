@@ -28,6 +28,7 @@
 #![no_std]
 #![feature(global_asm)]
 #![feature(asm)]
+#![feature(llvm_asm)]
 
 //! Low-level boot of the Raspberry's processor
 
@@ -77,20 +78,15 @@ extern "C" {
 
 /// Enable irq at CPU.
 pub unsafe fn enable_irq() {
-    asm!("msr daifclr, #2");
+    llvm_asm!("msr daifclr, #2");
 }
 
 /// Disable irq
 pub unsafe fn disable_irq() {
-    asm!("msr daifset, #2");
+    llvm_asm!("msr daifset, #2");
 }
 
 /// Sleep CPU
 pub unsafe fn wfe() {
-    asm!("wfe");
-}
-
-/// sleep CPU until interrupt
-pub unsafe fn wfi() {
-    asm!("wfi");
+    llvm_asm!("wfe");
 }

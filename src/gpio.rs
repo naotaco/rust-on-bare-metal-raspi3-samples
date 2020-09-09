@@ -22,7 +22,6 @@
  * SOFTWARE.
  */
 
-use super::MMIO_BASE;
 use register::{mmio::ReadWrite, mmio::WriteOnly, register_bitfields};
 
 // Descriptions taken from
@@ -77,6 +76,15 @@ register_bitfields! {
         ]
     ],
 
+    GPPUD[
+        PUD OFFSET(0) NUMBITS(2)[
+            Disabled = 0,
+            EnablePullDown = 1,
+            EnablePullUp = 2,
+            Reserved = 3
+        ]
+    ],
+
     /// GPIO Pull-up/down Clock Register 0
     GPPUDCLK0 [
         /// Pin 15
@@ -106,15 +114,10 @@ pub struct RegisterBlock {
     GPSET0: WriteOnly<u32, GPSET0::Register>, // 1c
     __reserved2: [u32; 0x2],
     GPCLR0: WriteOnly<u32, GPCLR0::Register>, // 0x28
+    __reserved3: [u32; 0x1a],
+    GPPUD: ReadWrite<u32, GPPUD::Register>,
+    GPPUDCLK0: ReadWrite<u32, GPPUDCLK0::Register>, // 0x98
 }
-
-pub const GPFSEL1: *const ReadWrite<u32, GPFSEL1::Register> =
-    (MMIO_BASE + 0x0020_0004) as *const ReadWrite<u32, GPFSEL1::Register>;
-
-pub const GPPUD: *const ReadWrite<u32> = (MMIO_BASE + 0x0020_0094) as *const ReadWrite<u32>;
-
-pub const GPPUDCLK0: *const ReadWrite<u32, GPPUDCLK0::Register> =
-    (MMIO_BASE + 0x0020_0098) as *const ReadWrite<u32, GPPUDCLK0::Register>;
 
 impl core::ops::Deref for GPIO {
     type Target = RegisterBlock;
@@ -148,5 +151,23 @@ impl GPIO {
         } else {
             self.GPCLR0.write(GPCLR0::CLR5::Negate);
         }
+    }
+
+    pub fn map_gpio_to_uart(&self) {
+        self.GPFSEL1
+            .modify(GPFSEL1::FSEL14::TXD0 + GPFSEL1::FSEL15::RXD0);
+    }
+
+    pub fn assert_uart_clock(&self) {
+        self.GPPUDCLK0
+            .write(GPPUDCLK0::PUDCLK14::AssertClock + GPPUDCLK0::PUDCLK15::AssertClock);
+    }
+
+    pub fn negate_all_clock(&self) {
+        self.GPPUDCLK0.set(0);
+    }
+
+    pub fn disable_pull_up_down(&self) {
+        self.GPPUD.write(GPPUD::PUD::Disabled);
     }
 }

@@ -6,8 +6,11 @@ use register::{
 
 const TIMER_BASE: u32 = super::MMIO_BASE + 0x3000;
 
+type Callback = fn(time: u32, ch: u32);
+
 pub struct TIMER {
-    occurred: [OptionalCell<bool>; 4],
+    callback: Option<Callback>,
+    fired: &'static [OptionalCell<bool>; 4],
 }
 
 #[allow(non_snake_case)]
@@ -57,22 +60,30 @@ impl core::ops::Deref for TIMER {
     }
 }
 
-impl crate::exception::InterruptionSource for TIMER {
-    fn on_interruption(&self, _id: u32) {
+impl crate::exception::InterruptDevice for TIMER {
+    fn on_fire(&self, id: u32) {
         for ch in 0..=3 {
             if self.is_match(ch) {
                 self.clear(ch);
-                self.occurred[ch as usize].set(true);
+                self.fired[ch as usize].insert(Some(true));
             }
+        }
+
+        match self.callback {
+            Some(c) => {
+                c(0, id);
+            }
+            None => {}
         }
     }
 }
 
 #[allow(dead_code)]
 impl TIMER {
-    pub fn new() -> TIMER {
+    pub fn new(flags: &'static [OptionalCell<bool>; 4]) -> TIMER {
         TIMER {
-            occurred: arr_macro::arr![OptionalCell::empty();4],
+            callback: None,
+            fired: flags,
         }
     }
 
@@ -122,11 +133,10 @@ impl TIMER {
         self.CS.write(m);
     }
 
-    pub fn occurred(&self, ch: usize) -> bool {
+    pub fn has_fired(&self, ch: usize) -> bool {
         match ch {
-            // take() returns a value and leave None.
-            0 | 1 | 2 | 3 => match self.occurred[ch].take() {
-                Some(v) => v,
+            0 | 1 | 2 | 3 => match self.fired[ch].take() {
+                Some(f) => f,
                 None => false,
             },
             _ => false,

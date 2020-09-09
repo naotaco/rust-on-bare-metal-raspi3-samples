@@ -22,12 +22,15 @@
  * SOFTWARE.
  */
 
+ 
+
 use super::MMIO_BASE;
 use core::ops;
 use register::{
     mmio::{ReadOnly, WriteOnly},
     register_bitfields,
 };
+
 
 register_bitfields! {
     u32,
@@ -127,7 +130,7 @@ impl Mbox {
                 break;
             }
 
-            unsafe { asm!("nop" :::: "volatile") };
+            unsafe { llvm_asm!("nop" :::: "volatile") };
         }
 
         let buf_ptr = self.buffer.as_ptr() as u32;
@@ -143,7 +146,7 @@ impl Mbox {
                     break;
                 }
 
-                unsafe { asm!("nop" :::: "volatile") };
+                unsafe { llvm_asm!("nop" :::: "volatile") };
             }
 
             let resp: u32 = self.READ.get();

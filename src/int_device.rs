@@ -2,6 +2,6 @@ struct InterruptContext {
     id: u32,
 }
 
-trait InterruptionSource {
-    fn on_interruption(context: &InterruptContext, &mut self);
+trait InterruptDevice {
+    fn on_fire(context: &InterruptContext, &mut self);
 }

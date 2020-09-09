@@ -27,10 +27,13 @@
 #![no_main]
 #![feature(asm)]
 #![feature(global_asm)]
+#![feature(llvm_asm)]
 #![feature(new_uninit)]
 #![feature(const_fn)]
 
-const MMIO_BASE: u32 = 0x3F00_0000;
+const MMIO_BASE: u32 = 0xfe00_0000; // RasPI common IPs (from BCM2835)
+const MMIO_BASE1: u32 = 0xfc00_0000;
+const MMIO_BASE2: u32 = 0xff80_0000; // ARM LOCAL. Includes GIC, local timer
 
 mod arm_debug;
 mod arm_timer;
@@ -38,6 +41,7 @@ mod dmac;
 mod exception;
 mod gpio;
 mod interrupt;
+mod interrupt_gic;
 mod mbox;
 mod optional_cell;
 mod timer;
@@ -104,7 +108,7 @@ unsafe fn user_main() -> ! {
     match uart.init(&mut mbox) {
         Ok(_) => uart.puts("\n[0] UART is live!\n"),
         Err(_) => loop {
-            asm!("wfe" :::: "volatile"); // If UART fails, abort early
+            llvm_asm!("wfe" :::: "volatile"); // If UART fails, abort early
         },
     }
 
@@ -120,7 +124,33 @@ unsafe fn user_main() -> ! {
     let dest = 0x800_0000;
     let size = 0x600_0000;
 
-    uart.puts("Initializing...\n");
+    uart.puts("Initializing GIC...\n");
+
+    let mut gic = interrupt_gic::Gic::new();
+    gic.init();
+    let max_int = gic.get_supported_int_number();
+    uart.hex(max_int);
+    uart.puts(" lines supported.\n"); // 7 lines on RasPi4.
+    gic.enable_int(interrupt_gic::Id::TIMER0);
+    gic.enable_int(interrupt_gic::Id::TIMER1);
+    gic.enable_int(interrupt_gic::Id::TIMER2);
+    gic.enable_int(interrupt_gic::Id::TIMER3);
+    gic.enable_int(interrupt_gic::Id::DMA0);
+    gic.enable_int(interrupt_gic::Id::LOCAL_TIMER);
+    gic.enable_int(interrupt_gic::Id::ARMC_TIMER);
+    gic.enable_int(interrupt_gic::Id::VC_TIMER0);
+    gic.enable_int(interrupt_gic::Id::VC_TIMER1);
+    gic.enable_int(interrupt_gic::Id::VC_TIMER2);
+    gic.enable_int(interrupt_gic::Id::VC_TIMER3);
+    // PPIs are CPU private. Can't set target CPU.
+    gic.set_target_cpu(interrupt_gic::Id::DMA0, 0);
+    gic.set_target_cpu(interrupt_gic::Id::LOCAL_TIMER, 0);
+    gic.set_target_cpu(interrupt_gic::Id::ARMC_TIMER, 0);
+    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER0, 0);
+    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER1, 0);
+    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER2, 0);
+    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER3, 0);
+    gic.enable_distribution();
 
     // init(src, size, 0xFF00_0000);
     // init(dest, size, 0x1200_0000);
@@ -128,34 +158,78 @@ unsafe fn user_main() -> ! {
     // dump(src, size, &uart);
     // dump(dest, size, &uart);
 
-    let timer = static_init!(timer::TIMER, timer::TIMER::new());
-    let arm_timer = static_init!(arm_timer::ArmTimer, arm_timer::ArmTimer::new());
-    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new());
+    // create static instances of drivers.
+    let timer_flags = static_init!(
+        [optional_cell::OptionalCell<bool>; 4],
+        [
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty()
+        ]
+    );
+
+    let arm_timer_flag = static_init!(
+        optional_cell::OptionalCell<bool>,
+        optional_cell::OptionalCell::empty()
+    );
+    let dma_flags = static_init!(
+        [optional_cell::OptionalCell<bool>; 16],
+        [
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+            optional_cell::OptionalCell::empty(),
+        ]
+    );
+
+    let timer = static_init!(timer::TIMER, timer::TIMER::new(timer_flags));
+    let arm_timer = static_init!(
+        arm_timer::ArmTimer,
+        arm_timer::ArmTimer::new(arm_timer_flag)
+    );
+    let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new(dma_flags));
 
     // setup irq handlers with drivers that have capability of irq handling.
     setup_irq_handlers(timer, arm_timer, dma, uart);
 
     // enable interrupt handling at int controller.
-    let int = interrupt::Interrupt::new();
-    int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
-    uart.puts("Enabling Irq1\n");
-    int.enable_irq(interrupt::InterruptId::TIMER1);
-    int.enable_irq(interrupt::InterruptId::DMA);
-
+    // let int = interrupt::Interrupt::new();
+    // int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
+    // uart.puts("Enabling Irq1\n");
+    // int.enable_irq(interrupt::InterruptId::TIMER1);
+    // int.enable_irq(interrupt::InterruptId::DMA);
+    uart.puts("going to enable CPU irq\n");
     // enable receiving irq at CPU
     raspi3_boot::enable_irq();
 
     // timer
     let current = timer.get_counter32();
-    let duration = 200_0000; // maybe 1sec.
-    uart.puts("Starting timer\n");
-    timer.set(1, duration + current);
+    let duration = 20_0000; // maybe 1sec.
+
+    // uart.puts("Starting timer\n");
+    // timer.set(0, duration + current);
+    // timer.set(1, duration + current); // Ch1 is available on RasPi3.
+    // timer.set(2, duration + current);
+    timer.set(3, duration + current); // it looks ch3 is available on RasPi4.
 
     // arm timer
     arm_timer.enable();
     arm_timer.start_free_run();
     arm_timer.enable_int();
-    arm_timer.set_count_down(1000000);
+    arm_timer.set_count_down(10000000);
 
     // dma
     let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
@@ -165,9 +239,9 @@ unsafe fn user_main() -> ! {
     // main looooop
     loop {
         let mut context = MainTaskContext {
-            timer_occurred: false,
-            arm_timer_occurred: false,
-            dma_occurred: false,
+            timer_fired: false,
+            arm_timer_fired: false,
+            dma_fired: false,
 
             timer: &timer,
             arm_timer: &arm_timer,
@@ -179,9 +253,9 @@ unsafe fn user_main() -> ! {
             // critical section start:
             raspi3_boot::disable_irq();
 
-            context.timer_occurred = timer.occurred(1);
-            context.arm_timer_occurred = arm_timer.occurred();
-            context.dma_occurred = dma.occurred(0);
+            context.timer_fired = timer.has_fired(3);
+            context.arm_timer_fired = arm_timer.has_fired();
+            context.dma_fired = dma.has_fired(0);
 
             // critical section end
             raspi3_boot::enable_irq();
@@ -190,16 +264,16 @@ unsafe fn user_main() -> ! {
         // perform main task once.
         main_task(context);
 
-        // sleep until interrupt.
-        raspi3_boot::wfi();
+        // sleep until next event (e.g. interrupt)
+        raspi3_boot::wfe();
     }
 }
 
 #[allow(dead_code)]
 struct MainTaskContext<'a> {
-    timer_occurred: bool,
-    arm_timer_occurred: bool,
-    dma_occurred: bool,
+    timer_fired: bool,
+    arm_timer_fired: bool,
+    dma_fired: bool,
 
     timer: &'a timer::TIMER,
     arm_timer: &'a arm_timer::ArmTimer,
@@ -208,17 +282,24 @@ struct MainTaskContext<'a> {
 }
 
 fn main_task(context: MainTaskContext) {
-    if context.timer_occurred {
-        context.uart.puts("[main] Timer occurred ch1\n");
+    if context.timer_fired {
+        context.uart.puts("[main] Timer fired ch1\n");
         let current = context.timer.get_counter32();
         let duration = 200_0000; // maybe 1sec.
-        context.timer.set(1, duration + current);
+        context.timer.set(3, duration + current);
     }
-    if context.arm_timer_occurred {
-        context.uart.puts("[main] Arm timer occurred\n");
+    if context.arm_timer_fired {
+        context.uart.puts("[main] Arm timer fired\n");
     }
-    if context.dma_occurred {
-        context.uart.puts("[main] DMA trans done.\n");
+    if context.dma_fired {
+        context.uart.puts("[main] DMA trans done. Kick again.\n");
+        let src = 0x200_0000;
+        let dest = 0x800_0000;
+        let size = 0x600_0000;
+        let cb = dmac::ControlBlock4::new(src, dest, size as u32, 0);
+        context.dma.init();
+        context.dma.turn_on(0);
+        context.dma.exec(0, &cb);
     }
 }
 
@@ -237,18 +318,41 @@ unsafe fn setup_irq_handlers(
     );
     let dma_int_ids = static_init!([u32; 1], [interrupt::InterruptId::DMA]);
     let arm_timer_int_ids = static_init!([u32; 1], [interrupt::BasicInterruptId::ARM_TIMER]);
+    let dma_gic_int_ids = static_init!([u32; 1], [interrupt_gic::Id::DMA0]);
+    let armc_timer_gic_int_ids = static_init!([u32; 1], [interrupt_gic::Id::ARMC_TIMER]);
+    let vc_timer_gic_int_ids = static_init!(
+        [u32; 4],
+        [
+            interrupt_gic::Id::VC_TIMER0,
+            interrupt_gic::Id::VC_TIMER1,
+            interrupt_gic::Id::VC_TIMER2,
+            interrupt_gic::Id::VC_TIMER3
+        ]
+    );
 
     let irq_devices = static_init!(
-        [exception::IrqHandler; 2],
+        [exception::IrqHandler; 5],
         [
-            exception::IrqHandler::new(timer, timer_int_ids),
-            exception::IrqHandler::new(dma, dma_int_ids)
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), timer_int_ids),
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), dma_int_ids),
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), dma_gic_int_ids),
+            exception::IrqHandler::new(
+                optional_cell::OptionalCell::new(arm_timer),
+                armc_timer_gic_int_ids
+            ),
+            exception::IrqHandler::new(
+                optional_cell::OptionalCell::new(timer),
+                vc_timer_gic_int_ids
+            )
         ]
     );
 
     let basic_irq_devices = static_init!(
         [exception::IrqHandler; 1],
-        [exception::IrqHandler::new(arm_timer, arm_timer_int_ids)]
+        [exception::IrqHandler::new(
+            optional_cell::OptionalCell::new(arm_timer),
+            arm_timer_int_ids
+        )]
     );
 
     let handler_info = static_init!(
@@ -256,7 +360,7 @@ unsafe fn setup_irq_handlers(
         exception::IrqHandlersSettings::new(irq_devices, basic_irq_devices)
     );
 
-    let register_result = exception::set_irq_handlers(handler_info);
+    let register_result = exception::set_irq_handlers2(handler_info);
 
     let debug_context = static_init!(
         exception::DebugContext,

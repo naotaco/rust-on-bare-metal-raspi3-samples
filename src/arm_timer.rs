@@ -7,7 +7,7 @@ use register::{
 const TIMER_BASE: u32 = super::MMIO_BASE + 0xB400;
 
 pub struct ArmTimer {
-    occurred: OptionalCell<bool>,
+    fired: &'static OptionalCell<bool>,
 }
 
 #[allow(non_snake_case)]
@@ -76,21 +76,17 @@ impl core::ops::Deref for ArmTimer {
 
 const BASIC_INT_NO_ARM_TIMER: u32 = 0;
 
-impl crate::exception::InterruptionSource for ArmTimer {
-    fn on_interruption(&self, id: u32) {
-        if id == BASIC_INT_NO_ARM_TIMER {
-            self.clear_irq();
-            self.occurred.insert(Some(true));
-        }
+impl crate::exception::InterruptDevice for ArmTimer {
+    fn on_fire(&self, id: u32) {
+        self.clear_irq();
+        self.fired.insert(Some(true));
     }
 }
 
 #[allow(dead_code)]
 impl ArmTimer {
-    pub fn new() -> ArmTimer {
-        ArmTimer {
-            occurred: OptionalCell::new(false),
-        }
+    pub fn new(fired: &'static OptionalCell<bool>) -> ArmTimer {
+        ArmTimer { fired }
     }
     fn ptr() -> *const RegisterBlock {
         TIMER_BASE as *const _
@@ -125,8 +121,8 @@ impl ArmTimer {
         self.IRQ_CLEAR.set(1);
     }
 
-    pub fn occurred(&self) -> bool {
-        match self.occurred.take() {
+    pub fn has_fired(&self) -> bool {
+        match self.fired.take() {
             Some(f) => f,
             None => false,
         }

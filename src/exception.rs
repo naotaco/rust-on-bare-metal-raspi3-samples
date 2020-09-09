@@ -28,17 +28,20 @@ struct ExceptionContext {
     spsr_el1: SpsrEL1,
 }
 
-pub trait InterruptionSource {
-    fn on_interruption(&self, id: u32);
+pub trait InterruptDevice {
+    fn on_fire(&self, id: u32);
 }
 
 pub struct IrqHandler {
-    device: &'static dyn InterruptionSource,
+    device: OptionalCell<&'static dyn InterruptDevice>,
     int_no: &'static [u32],
 }
 
 impl IrqHandler {
-    pub fn new(device: &'static dyn InterruptionSource, int_no: &'static [u32]) -> IrqHandler {
+    pub fn new(
+        device: OptionalCell<&'static dyn InterruptDevice>,
+        int_no: &'static [u32],
+    ) -> IrqHandler {
         IrqHandler { device, int_no }
     }
 }
@@ -118,6 +121,9 @@ fn irq_handler(e: &ExceptionContext) {
         puts("\n");
 
         let int = crate::interrupt::Interrupt::new();
+        let basic_pend = int.get_raw_basic_pending();
+
+        let gic = crate::interrupt_gic::Gic::new();
 
         if int.is_any_irq_pending() {
             let pend = int.get_raw_pending();
@@ -132,30 +138,54 @@ fn irq_handler(e: &ExceptionContext) {
                         if d.int_no.contains(&id) {
                             puts("  from device: ");
                             hexln(id);
-                            d.device.on_interruption(id);
+                            d.device.map(|d| d.on_fire(id));
+                        }
+                    }
+                }
+            }
+        } else if basic_pend != 0 {
+            puts("Basic IRQ pending: ");
+            hexln(basic_pend);
+            for id in 0..7 {
+                if (basic_pend & (1 << id)) != 0 {
+                    let devs = DEVICES.unwrap().basic_irq_devices;
+                    for d in devs.iter() {
+                        if d.int_no.contains(&id) {
+                            puts("  from device: ");
+                            hexln(id);
+                            d.device.map(|d| d.on_fire(id));
                         }
                     }
                 }
             }
         } else {
-            let pend = int.get_raw_basic_pending();
-            if pend != 0 {
-                puts("Basic IRQ pending: ");
-                hexln(pend);
-                for id in 0..7 {
-                    if (pend & (1 << id)) != 0 {
-                        let devs = DEVICES.unwrap().basic_irq_devices;
+            loop {
+                let gic_id = gic.get_first_pending_id();
+                match gic_id {
+                    Some(id) => {
+                        puts("Found pending id on GIC ");
+                        hexln(id);
+                        let devs = DEVICES.unwrap().irq_devices;
+                        let mut handled: bool = false;
                         for d in devs.iter() {
                             if d.int_no.contains(&id) {
                                 puts("  from device: ");
                                 hexln(id);
-                                d.device.on_interruption(id);
+                                d.device.map(|d| d.on_fire(id));
+                                handled = true;
                             }
                         }
+                        if !handled {
+                            puts("Unhandled exception ");
+                            hexln(id);
+                        }
+                        gic.end_interrupt_handling(id);
+                    }
+                    None => {
+                        puts("No more pending id.\n");
+                        break;
                     }
                 }
-            } else {
-                puts("Some unknown case...\n");
             }
         }
     }
@@ -290,7 +320,7 @@ pub unsafe fn el2_to_el1_transition(addr: u64) -> ! {
     asm::eret()
 }
 
-pub unsafe fn set_irq_handlers(h: &'static IrqHandlersSettings) -> bool {
+pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> bool {
     (*DEVICES.get_or_insert(h)) as *const _ == h
 }
 
