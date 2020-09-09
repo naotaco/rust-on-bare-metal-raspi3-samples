@@ -2,7 +2,7 @@
 #[inline(always)]
 pub fn disable() {
     unsafe {
-        asm!("msr daifset, #2"
+        llvm_asm!("msr daifset, #2"
                  :
                  :
                  :
@@ -17,7 +17,7 @@ pub fn disable() {
 /// - Do not call this function inside an `interrupt::free` critical section
 #[inline(always)]
 pub unsafe fn enable() {
-    asm!("msr daifclr, #2" // to clear only "I" bit.
+    llvm_asm!("msr daifclr, #2" // to clear only "I" bit.
                  :
                  :
                  :
