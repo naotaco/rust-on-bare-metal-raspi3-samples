@@ -150,6 +150,7 @@ impl ops::Deref for Uart {
     }
 }
 
+#[allow(dead_code)]
 impl Uart {
     pub fn new() -> Uart {
         Uart
