@@ -29,7 +29,7 @@
 #![feature(llvm_asm)]
 #![feature(const_fn)]
 
-const MMIO_BASE: u32 = 0xFE00_0000;
+const MMIO_BASE: u32 = 0x3F00_0000;
 
 mod arm_debug;
 mod dmac;
