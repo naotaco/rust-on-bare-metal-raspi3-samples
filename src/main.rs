@@ -27,7 +27,6 @@
 #![no_main]
 #![feature(global_asm)]
 #![feature(llvm_asm)]
-#![feature(new_uninit)]
 #![feature(const_fn)]
 
 const MMIO_BASE: u32 = 0xFE00_0000;

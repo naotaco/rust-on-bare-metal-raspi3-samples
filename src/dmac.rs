@@ -1,6 +1,6 @@
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::compiler_fence;
-use register::{mmio::ReadWrite, register_bitfields};
+use register::{mmio::ReadWrite, register_bitfields, InMemoryRegister};
 
 pub struct DMAC {
     _some_data: u32,
@@ -520,19 +520,19 @@ impl DMAC3 {
 #[allow(non_snake_case)]
 #[repr(C, align(32))]
 pub struct ControlBlock4 {
-    pub TI: ReadWrite<u32, TI::Register>, // 0x00, accociated to TI register.
-    pub source_address: u32,              // 0x04, SOURCE_AD
-    pub destination_address: u32,         // 0x08, DEST_AD
-    pub transfer_length: u32,             // 0x0C, TXFR_LEN
-    pub two_d_mode_stride: u32,           // 0x10, STRIDE
-    pub next_control_block_address: u32,  // 0x14, NEXTCONBK
-    __reserved: [u32; 2],                 // N/A
+    pub TI: InMemoryRegister<u32, TI::Register>, // 0x00, accociated to TI register.
+    pub source_address: u32,                     // 0x04, SOURCE_AD
+    pub destination_address: u32,                // 0x08, DEST_AD
+    pub transfer_length: u32,                    // 0x0C, TXFR_LEN
+    pub two_d_mode_stride: u32,                  // 0x10, STRIDE
+    pub next_control_block_address: u32,         // 0x14, NEXTCONBK
+    __reserved: [u32; 2],                        // N/A
 }
 
 impl ControlBlock4 {
     pub fn new(src: u32, dest: u32, length: u32, burst: u8) -> ControlBlock4 {
         let cb = ControlBlock4 {
-            TI: ReadWrite::<u32, TI::Register>::new(0),
+            TI: InMemoryRegister::<u32, TI::Register>::new(0),
             source_address: src,
             destination_address: dest,
             transfer_length: length,

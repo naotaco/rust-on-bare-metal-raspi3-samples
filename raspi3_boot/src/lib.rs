@@ -92,5 +92,5 @@ pub unsafe fn wfe() {
 
 /// sleep CPU until interrupt
 pub unsafe fn wfi() {
-    asm!("wfi");
+    llvm_asm!("wfi");
 }
