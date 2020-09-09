@@ -1,8 +1,7 @@
+use crate::int_device;
+use crate::interrupt::Interrupt;
 use core::ops;
-use register::{
-    mmio::{ReadOnly, ReadWrite},
-    register_bitfields,
-};
+use register::{mmio::ReadWrite, register_bitfields};
 
 const GIC_BASE: u32 = super::MMIO_BASE2 + 0x4_1000;
 // const GICC_BASE: u32 = super::MMIO_BASE2 + 0x4_2000;
@@ -28,6 +27,7 @@ const ARMC_PERI_IRQS_BASE: u32 = 64;
 const VIDEOCORE_IRQS_BASE: u32 = 96;
 
 pub struct Id {}
+#[allow(dead_code)]
 impl Id {
     pub const TIMER0: u32 = PPI_BASE + 13;
     pub const TIMER1: u32 = PPI_BASE + 14;
@@ -130,9 +130,81 @@ impl ops::Deref for Gic {
     }
 }
 
+impl Interrupt for Gic {
+    fn enable_int(&mut self, dev: int_device::Device) -> bool {
+        let id = Gic::to_id(dev);
+        if id > 2u32.pow(self.supported_lines) {
+            return false;
+        }
+
+        let orig = self.GICD.ISENABLER[(id / 32) as usize].get();
+        self.GICD.ISENABLER[(id / 32) as usize].set(orig | 1 << (id % 32));
+
+        true
+    }
+
+    fn set_target_cpu(&self, dev: int_device::Device, cpu: u32) {
+        let id = Gic::to_id(dev);
+        let c = 1 << cpu;
+        self.GICD.ITARGETSR[(id / 4) as usize].set(c << ((id % 4) * 8));
+    }
+
+    fn enable_distribution(&self) {
+        self.GICD
+            .CTLR
+            .modify(GICD_CTLR::ENABLE_GRP0::ENABLE + GICD_CTLR::ENABLE_GRP1NS::ENABLE);
+    }
+
+    fn get_first_pending_id(&self) -> Option<u32> {
+        let id = self.GICC.IAR.read(GICC_IAR::INT_ID);
+        if id > 2u32.pow(8) {
+            return None;
+        }
+
+        Some(id)
+    }
+
+    fn get_first_pending_device(&self) -> Option<int_device::Device> {
+        let id = self.get_first_pending_id();
+        match id {
+            Some(i) => Some(Gic::to_device(i)),
+            None => None,
+        }
+    }
+
+    fn end_interrupt_handling(&self, dev: int_device::Device) {
+        let id = Gic::to_id(dev);
+        self.GICC.EOIR.set(id);
+    }
+
+    fn device_to_id(&self, dev: int_device::Device) -> u32 {
+        Gic::to_id(dev)
+    }
+}
+
 impl Gic {
     pub fn new() -> Gic {
         Gic { supported_lines: 0 }
+    }
+
+    pub fn to_id(dev: int_device::Device) -> u32 {
+        match dev {
+            int_device::Device::Timer1 => Id::VC_TIMER1,
+            int_device::Device::Timer3 => Id::VC_TIMER3,
+            int_device::Device::ArmTimer => Id::ARMC_TIMER,
+            int_device::Device::Dma => Id::DMA0,
+            _ => 0,
+        }
+    }
+
+    fn to_device(id: u32) -> int_device::Device {
+        match id {
+            Id::VC_TIMER1 => int_device::Device::Timer1,
+            Id::VC_TIMER3 => int_device::Device::Timer3,
+            Id::ARMC_TIMER => int_device::Device::ArmTimer,
+            Id::DMA0 => int_device::Device::Dma,
+            _ => int_device::Device::Invalid,
+        }
     }
 
     pub fn init(&mut self) {
@@ -146,40 +218,5 @@ impl Gic {
 
     pub fn get_supported_int_number(&self) -> u32 {
         self.GICD.TYPER.read(GICD_TYPER::ITLN)
-    }
-
-    pub fn enable_int(&mut self, id: u32) -> bool {
-        if id > 2u32.pow(self.supported_lines) {
-            return false;
-        }
-
-        let orig = self.GICD.ISENABLER[(id / 32) as usize].get();
-        self.GICD.ISENABLER[(id / 32) as usize].set(orig | 1 << (id % 32));
-
-        true
-    }
-
-    pub fn set_target_cpu(&self, id: u32, cpu: u32) {
-        let c = 1 << cpu;
-        self.GICD.ITARGETSR[(id / 4) as usize].set(c << ((id % 4) * 8));
-    }
-
-    pub fn enable_distribution(&self) {
-        self.GICD
-            .CTLR
-            .modify(GICD_CTLR::ENABLE_GRP0::ENABLE + GICD_CTLR::ENABLE_GRP1NS::ENABLE);
-    }
-
-    pub fn get_first_pending_id(&self) -> Option<u32> {
-        let id = self.GICC.IAR.read(GICC_IAR::INT_ID);
-        if id > 2u32.pow(8) {
-            return None;
-        }
-
-        Some(id)
-    }
-
-    pub fn end_interrupt_handling(&self, id: u32) {
-        self.GICC.EOIR.set(id);
     }
 }

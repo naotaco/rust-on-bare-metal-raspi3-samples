@@ -1,15 +1,30 @@
 [package]
 name = "kernel8"
 version = "0.1.0"
-authors = ["Andre Richter <andre.o.richter@gmail.com>"]
+authors = ["Andre Richter <andre.o.richter@gmail.com>", "Nao Taco <naotaco@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-raspi3_boot = { path = "raspi3_boot" }
+armv8_boot = { path = "armv8_boot" }
 nt_allocator = { git = "https://github.com/naotaco/nt-global-alloc-rs.git" }
 register = "0.5.x"
 cortex-a = { version = "3.0.x"}
 static_assertions = "1.1.x"
+
+[dependencies.raspi_bsp]
+path="raspi_bsp"
+# Enable one of them. 2711 for RasPi4, 2835 for 3.
+features=["bcm2711"]
+# features=["bcm2837"]
+
+[features]
+default=["gic400v2"] # set gic400v2 for RasPi4, set interrupt_legacy for RasPi3.
+# default=["interrupt_legacy"]
+
+interrupt_legacy=[] # for RasPi3
+gic400v2=[] # for RasPi4
+
+
 
 [package.metadata.cargo-xbuild]
 sysroot_path = "../xbuild_sysroot"

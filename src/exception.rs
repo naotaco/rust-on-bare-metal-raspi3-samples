@@ -34,32 +34,25 @@ pub trait InterruptDevice {
 
 pub struct IrqHandler {
     device: OptionalCell<&'static dyn InterruptDevice>,
-    int_no: &'static [u32],
+    int_no: &'static [crate::int_device::Device],
 }
 
 impl IrqHandler {
     pub fn new(
         device: OptionalCell<&'static dyn InterruptDevice>,
-        int_no: &'static [u32],
+        int_no: &'static [crate::int_device::Device],
     ) -> IrqHandler {
         IrqHandler { device, int_no }
     }
 }
 
 pub struct IrqHandlersSettings {
-    pub irq_devices: &'static [IrqHandler],
-    pub basic_irq_devices: &'static [IrqHandler],
+    pub devices: &'static [IrqHandler],
 }
 
 impl IrqHandlersSettings {
-    pub fn new(
-        irq_devices: &'static [IrqHandler],
-        basic_irq_devices: &'static [IrqHandler],
-    ) -> IrqHandlersSettings {
-        IrqHandlersSettings {
-            irq_devices,
-            basic_irq_devices,
-        }
+    pub fn new(devices: &'static [IrqHandler]) -> IrqHandlersSettings {
+        IrqHandlersSettings { devices }
     }
 }
 
@@ -82,23 +75,26 @@ impl DebugContext {
 
 static mut DEBUG_CONTEXT: Option<&'static DebugContext> = None;
 
-//--------------------------------------------------------------------------------------------------
-// Exception vector implementation
-//--------------------------------------------------------------------------------------------------
+static mut INT_CONTROLLER: Option<&'static dyn crate::interrupt::Interrupt> = None;
+
+#[allow(dead_code)]
 unsafe fn puts(s: &str) {
     let s2 = ["[Exception] ", s].concat();
     DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(&s2));
 }
 
+#[allow(dead_code)]
 unsafe fn puts2(s: &str) {
     let s2 = ["[Exception] ", s].concat();
     DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts(&s2));
 }
 
+#[allow(dead_code)]
 unsafe fn hex(v: u32) {
     DEBUG_CONTEXT.unwrap().callback.map(|c| c.hex(v));
 }
 
+#[allow(dead_code)]
 unsafe fn hexln(v: u32) {
     DEBUG_CONTEXT.unwrap().callback.map(|c| c.hex(v));
     DEBUG_CONTEXT.unwrap().callback.map(|c| c.puts("\n"));
@@ -117,74 +113,33 @@ fn default_exception_handler(e: &ExceptionContext) {
 fn irq_handler(e: &ExceptionContext) {
     unsafe {
         puts("IRQ handler from 0x");
-        hex(e.elr_el1 as u32);
-        puts("\n");
+        hexln(e.elr_el1 as u32);
 
-        let int = crate::interrupt::Interrupt::new();
-        let basic_pend = int.get_raw_basic_pending();
+        let intc = INT_CONTROLLER.unwrap();
 
-        let gic = crate::interrupt_gic::Gic::new();
-
-        if int.is_any_irq_pending() {
-            let pend = int.get_raw_pending();
-            puts2("IRQ pending: ");
-            hex((pend & 0xFFFF_FFFF) as u32);
-            puts(" ");
-            hexln(((pend >> 32) & 0xFFFF_FFFF) as u32);
-            for id in 0..63 {
-                if (pend & (1 << id)) != 0 {
-                    let devs = DEVICES.unwrap().irq_devices;
+        loop {
+            let dev = intc.get_first_pending_device();
+            match dev {
+                Some(dev) => {
+                    puts("Found pending id on GIC ");
+                    let devs = DEVICES.unwrap().devices;
+                    let id: u32 = 0;
+                    let mut handled: bool = false;
                     for d in devs.iter() {
-                        if d.int_no.contains(&id) {
-                            puts("  from device: ");
-                            hexln(id);
+                        if d.int_no.contains(&dev) {
                             d.device.map(|d| d.on_fire(id));
+                            handled = true;
                         }
                     }
-                }
-            }
-        } else if basic_pend != 0 {
-            puts("Basic IRQ pending: ");
-            hexln(basic_pend);
-            for id in 0..7 {
-                if (basic_pend & (1 << id)) != 0 {
-                    let devs = DEVICES.unwrap().basic_irq_devices;
-                    for d in devs.iter() {
-                        if d.int_no.contains(&id) {
-                            puts("  from device: ");
-                            hexln(id);
-                            d.device.map(|d| d.on_fire(id));
-                        }
-                    }
-                }
-            }
-        } else {
-            loop {
-                let gic_id = gic.get_first_pending_id();
-                match gic_id {
-                    Some(id) => {
-                        puts("Found pending id on GIC ");
+                    if !handled {
+                        puts("Unhandled exception ");
                         hexln(id);
-                        let devs = DEVICES.unwrap().irq_devices;
-                        let mut handled: bool = false;
-                        for d in devs.iter() {
-                            if d.int_no.contains(&id) {
-                                puts("  from device: ");
-                                hexln(id);
-                                d.device.map(|d| d.on_fire(id));
-                                handled = true;
-                            }
-                        }
-                        if !handled {
-                            puts("Unhandled exception ");
-                            hexln(id);
-                        }
-                        gic.end_interrupt_handling(id);
                     }
-                    None => {
-                        puts("No more pending id.\n");
-                        break;
-                    }
+                    intc.end_interrupt_handling(dev);
+                }
+                None => {
+                    puts("No more pending id.\n");
+                    break;
                 }
             }
         }
@@ -326,4 +281,8 @@ pub unsafe fn set_irq_handlers2(h: &'static IrqHandlersSettings) -> bool {
 
 pub unsafe fn set_debug_context(c: &'static DebugContext) -> bool {
     (*DEBUG_CONTEXT.get_or_insert(c)) as *const _ == c
+}
+
+pub unsafe fn set_int_controller(c: &'static dyn crate::interrupt::Interrupt) -> bool {
+    (*INT_CONTROLLER.get_or_insert(c)) as *const _ == c
 }

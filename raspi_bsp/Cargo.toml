@@ -1,0 +1,11 @@
+[package]
+name = "raspi_bsp"
+version = "0.1.0"
+authors = ["Nao Taco<naotaco@gmail.com>"]
+edition = "2018"
+
+
+[features]
+default = []
+bcm2711 = []
+bcm2837 = []

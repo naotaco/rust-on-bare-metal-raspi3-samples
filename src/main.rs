@@ -31,17 +31,20 @@
 #![feature(new_uninit)]
 #![feature(const_fn)]
 
-const MMIO_BASE: u32 = 0xfe00_0000; // RasPI common IPs (from BCM2835)
-const MMIO_BASE1: u32 = 0xfc00_0000;
-const MMIO_BASE2: u32 = 0xff80_0000; // ARM LOCAL. Includes GIC, local timer
-
 mod arm_debug;
 mod arm_timer;
 mod dmac;
 mod exception;
 mod gpio;
+mod int_device;
 mod interrupt;
+
+#[cfg(feature = "interrupt_legacy")]
+mod interrupt_legacy;
+
+#[cfg(feature = "gic400v2")]
 mod interrupt_gic;
+
 mod mbox;
 mod optional_cell;
 mod timer;
@@ -50,6 +53,11 @@ mod utils;
 
 use nt_allocator::NtGlobalAlloc;
 extern crate alloc;
+
+const MMIO_BASE: u32 = raspi_bsp::RasPiBsp::MMIO_BASE;
+
+#[cfg(feature = "gic400v2")]
+const MMIO_BASE2: u32 = raspi_bsp::RasPiBsp::MMIO_BASE2;
 
 #[global_allocator]
 static mut GLOBAL_ALLOCATOR: NtGlobalAlloc = NtGlobalAlloc {
@@ -97,6 +105,24 @@ fn kernel_entry() {
     }
 }
 
+#[cfg(feature = "interrupt_legacy")]
+unsafe fn get_intc() -> &'static mut dyn crate::interrupt::Interrupt {
+    let int = static_init!(
+        crate::interrupt_legacy::InterruptLegacy,
+        crate::interrupt_legacy::InterruptLegacy::new()
+    );
+    let intc: &'static mut dyn crate::interrupt::Interrupt = int;
+    intc
+}
+
+#[cfg(feature = "gic400v2")]
+unsafe fn get_intc() -> &'static mut dyn crate::interrupt::Interrupt {
+    let gic = static_init!(crate::interrupt_gic::Gic, crate::interrupt_gic::Gic::new());
+    gic.init();
+    let intc: &'static mut dyn crate::interrupt::Interrupt = gic;
+    intc
+}
+
 unsafe fn user_main() -> ! {
     arm_debug::setup_debug();
 
@@ -126,31 +152,18 @@ unsafe fn user_main() -> ! {
 
     uart.puts("Initializing GIC...\n");
 
-    let mut gic = interrupt_gic::Gic::new();
-    gic.init();
-    let max_int = gic.get_supported_int_number();
-    uart.hex(max_int);
-    uart.puts(" lines supported.\n"); // 7 lines on RasPi4.
-    gic.enable_int(interrupt_gic::Id::TIMER0);
-    gic.enable_int(interrupt_gic::Id::TIMER1);
-    gic.enable_int(interrupt_gic::Id::TIMER2);
-    gic.enable_int(interrupt_gic::Id::TIMER3);
-    gic.enable_int(interrupt_gic::Id::DMA0);
-    gic.enable_int(interrupt_gic::Id::LOCAL_TIMER);
-    gic.enable_int(interrupt_gic::Id::ARMC_TIMER);
-    gic.enable_int(interrupt_gic::Id::VC_TIMER0);
-    gic.enable_int(interrupt_gic::Id::VC_TIMER1);
-    gic.enable_int(interrupt_gic::Id::VC_TIMER2);
-    gic.enable_int(interrupt_gic::Id::VC_TIMER3);
+    let intc = get_intc();
+
+    intc.enable_int(int_device::Device::Timer1);
+    intc.enable_int(int_device::Device::ArmTimer);
+    intc.enable_int(int_device::Device::Dma);
+
     // PPIs are CPU private. Can't set target CPU.
-    gic.set_target_cpu(interrupt_gic::Id::DMA0, 0);
-    gic.set_target_cpu(interrupt_gic::Id::LOCAL_TIMER, 0);
-    gic.set_target_cpu(interrupt_gic::Id::ARMC_TIMER, 0);
-    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER0, 0);
-    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER1, 0);
-    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER2, 0);
-    gic.set_target_cpu(interrupt_gic::Id::VC_TIMER3, 0);
-    gic.enable_distribution();
+    intc.set_target_cpu(int_device::Device::Timer1, 0);
+    intc.set_target_cpu(int_device::Device::ArmTimer, 0);
+    intc.set_target_cpu(int_device::Device::Dma, 0);
+
+    intc.enable_distribution();
 
     // init(src, size, 0xFF00_0000);
     // init(dest, size, 0x1200_0000);
@@ -203,27 +216,27 @@ unsafe fn user_main() -> ! {
     let dma = static_init!(dmac::DMAC4, dmac::DMAC4::new(dma_flags));
 
     // setup irq handlers with drivers that have capability of irq handling.
-    setup_irq_handlers(timer, arm_timer, dma, uart);
+    setup_irq_handlers(timer, arm_timer, dma, uart, intc);
 
     // enable interrupt handling at int controller.
-    // let int = interrupt::Interrupt::new();
-    // int.enable_basic_irq(interrupt::BasicInterruptId::ARM_TIMER);
+    // let int = interrupt_legacy::interrupt_legacy::new();
+    // int.enable_basic_irq(interrupt_legacy::BasicInterruptId::ARM_TIMER);
     // uart.puts("Enabling Irq1\n");
-    // int.enable_irq(interrupt::InterruptId::TIMER1);
-    // int.enable_irq(interrupt::InterruptId::DMA);
+    // int.enable_irq(interrupt_legacy::InterruptId::TIMER1);
+    // int.enable_irq(interrupt_legacy::InterruptId::DMA);
     uart.puts("going to enable CPU irq\n");
     // enable receiving irq at CPU
-    raspi3_boot::enable_irq();
+    armv8_boot::enable_irq();
 
     // timer
     let current = timer.get_counter32();
     let duration = 20_0000; // maybe 1sec.
 
-    // uart.puts("Starting timer\n");
+    uart.puts("Starting timer\n");
     // timer.set(0, duration + current);
-    // timer.set(1, duration + current); // Ch1 is available on RasPi3.
-    // timer.set(2, duration + current);
-    timer.set(3, duration + current); // it looks ch3 is available on RasPi4.
+    timer.set(1, duration + current); // Ch1 is available on RasPi3.
+                                      // timer.set(2, duration + current);
+                                      // timer.set(3, duration + current); // it looks ch3 is available on RasPi4.
 
     // arm timer
     arm_timer.enable();
@@ -251,21 +264,21 @@ unsafe fn user_main() -> ! {
 
         {
             // critical section start:
-            raspi3_boot::disable_irq();
+            armv8_boot::disable_irq();
 
-            context.timer_fired = timer.has_fired(3);
+            context.timer_fired = timer.has_fired(1);
             context.arm_timer_fired = arm_timer.has_fired();
             context.dma_fired = dma.has_fired(0);
 
             // critical section end
-            raspi3_boot::enable_irq();
+            armv8_boot::enable_irq();
         }
 
         // perform main task once.
         main_task(context);
 
         // sleep until next event (e.g. interrupt)
-        raspi3_boot::wfe();
+        armv8_boot::wfe();
     }
 }
 
@@ -286,7 +299,7 @@ fn main_task(context: MainTaskContext) {
         context.uart.puts("[main] Timer fired ch1\n");
         let current = context.timer.get_counter32();
         let duration = 200_0000; // maybe 1sec.
-        context.timer.set(3, duration + current);
+        context.timer.set(1, duration + current);
     }
     if context.arm_timer_fired {
         context.uart.puts("[main] Arm timer fired\n");
@@ -308,56 +321,34 @@ unsafe fn setup_irq_handlers(
     arm_timer: &'static arm_timer::ArmTimer,
     dma: &'static dmac::DMAC4,
     uart: &'static uart::Uart,
+    intc: &'static dyn interrupt::Interrupt,
 ) {
     let timer_int_ids = static_init!(
-        [u32; 2],
+        [int_device::Device; 4],
         [
-            interrupt::InterruptId::TIMER1,
-            interrupt::InterruptId::TIMER3
+            int_device::Device::Timer0,
+            int_device::Device::Timer1,
+            int_device::Device::Timer2,
+            int_device::Device::Timer3,
         ]
     );
-    let dma_int_ids = static_init!([u32; 1], [interrupt::InterruptId::DMA]);
-    let arm_timer_int_ids = static_init!([u32; 1], [interrupt::BasicInterruptId::ARM_TIMER]);
-    let dma_gic_int_ids = static_init!([u32; 1], [interrupt_gic::Id::DMA0]);
-    let armc_timer_gic_int_ids = static_init!([u32; 1], [interrupt_gic::Id::ARMC_TIMER]);
-    let vc_timer_gic_int_ids = static_init!(
-        [u32; 4],
-        [
-            interrupt_gic::Id::VC_TIMER0,
-            interrupt_gic::Id::VC_TIMER1,
-            interrupt_gic::Id::VC_TIMER2,
-            interrupt_gic::Id::VC_TIMER3
-        ]
-    );
-
+    let dma_int_ids = static_init!([int_device::Device; 1], [int_device::Device::Dma]);
+    let arm_timer_int_ids = static_init!([int_device::Device; 1], [int_device::Device::ArmTimer]);
     let irq_devices = static_init!(
-        [exception::IrqHandler; 5],
+        [exception::IrqHandler; 3],
         [
             exception::IrqHandler::new(optional_cell::OptionalCell::new(timer), timer_int_ids),
-            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), dma_int_ids),
-            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), dma_gic_int_ids),
             exception::IrqHandler::new(
                 optional_cell::OptionalCell::new(arm_timer),
-                armc_timer_gic_int_ids
+                arm_timer_int_ids
             ),
-            exception::IrqHandler::new(
-                optional_cell::OptionalCell::new(timer),
-                vc_timer_gic_int_ids
-            )
+            exception::IrqHandler::new(optional_cell::OptionalCell::new(dma), dma_int_ids),
         ]
-    );
-
-    let basic_irq_devices = static_init!(
-        [exception::IrqHandler; 1],
-        [exception::IrqHandler::new(
-            optional_cell::OptionalCell::new(arm_timer),
-            arm_timer_int_ids
-        )]
     );
 
     let handler_info = static_init!(
         exception::IrqHandlersSettings,
-        exception::IrqHandlersSettings::new(irq_devices, basic_irq_devices)
+        exception::IrqHandlersSettings::new(irq_devices)
     );
 
     let register_result = exception::set_irq_handlers2(handler_info);
@@ -373,5 +364,12 @@ unsafe fn setup_irq_handlers(
     } else {
         uart.puts("Something wrong in handler registeration\n");
     }
+
+    let register_intc = exception::set_int_controller(intc);
+    if register_intc {
+        uart.puts("Successfully registerd int controller!\n");
+    } else {
+        uart.puts("Something wrong in intc registeration\n");
+    }
 }
-raspi3_boot::entry!(kernel_entry);
+armv8_boot::entry!(kernel_entry);

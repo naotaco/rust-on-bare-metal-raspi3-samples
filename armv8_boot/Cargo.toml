@@ -1,5 +1,5 @@
 [package]
-name = "raspi3_boot"
+name = "armv8_boot"
 version = "0.1.0"
 authors = ["Andre Richter <andre.o.richter@gmail.com>"]
 edition = "2018"

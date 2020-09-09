@@ -74,10 +74,8 @@ impl core::ops::Deref for ArmTimer {
     }
 }
 
-const BASIC_INT_NO_ARM_TIMER: u32 = 0;
-
 impl crate::exception::InterruptDevice for ArmTimer {
-    fn on_fire(&self, id: u32) {
+    fn on_fire(&self, _id: u32) {
         self.clear_irq();
         self.fired.insert(Some(true));
     }

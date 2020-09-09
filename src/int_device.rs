@@ -1,7 +1,10 @@
-struct InterruptContext {
-    id: u32,
-}
-
-trait InterruptDevice {
-    fn on_fire(context: &InterruptContext, &mut self);
+#[derive(PartialEq)]
+pub enum Device {
+    Timer0,
+    Timer1,
+    Timer2,
+    Timer3,
+    ArmTimer,
+    Dma,
+    Invalid,
 }
