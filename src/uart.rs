@@ -197,21 +197,22 @@ impl Uart {
 
         // map UART0 to GPIO pins
         unsafe {
-            (*gpio::GPFSEL1).modify(gpio::GPFSEL1::FSEL14::TXD0 + gpio::GPFSEL1::FSEL15::RXD0);
+            let g = gpio::GPIO::new();
 
-            (*gpio::GPPUD).set(0); // enable pins 14 and 15
+            g.map_gpio_to_uart();
+            g.disable_pull_up_down();
+
             for _ in 0..150 {
-                asm!("nop" :::: "volatile");
+                llvm_asm!("nop" :::: "volatile");
             }
 
-            (*gpio::GPPUDCLK0).write(
-                gpio::GPPUDCLK0::PUDCLK14::AssertClock + gpio::GPPUDCLK0::PUDCLK15::AssertClock,
-            );
+            g.assert_uart_clock();
+
             for _ in 0..150 {
-                asm!("nop" :::: "volatile");
+                llvm_asm!("nop" :::: "volatile");
             }
 
-            (*gpio::GPPUDCLK0).set(0);
+            g.negate_all_clock();
         }
 
         self.ICR.write(ICR::ALL::CLEAR);
@@ -232,7 +233,7 @@ impl Uart {
                 break;
             }
 
-            unsafe { asm!("nop" :::: "volatile") };
+            unsafe { llvm_asm!("nop" :::: "volatile") };
         }
 
         // write the character to the buffer
@@ -247,7 +248,7 @@ impl Uart {
                 break;
             }
 
-            unsafe { asm!("nop" :::: "volatile") };
+            unsafe { llvm_asm!("nop" :::: "volatile") };
         }
 
         // read it and return

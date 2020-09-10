@@ -25,7 +25,7 @@
 
 #![no_std]
 #![no_main]
-#![feature(asm)]
+#![feature(llvm_asm)]
 #![feature(global_asm)]
 #![feature(new_uninit)]
 #![feature(const_fn)]
@@ -104,7 +104,7 @@ unsafe fn user_main() -> ! {
     match uart.init(&mut mbox) {
         Ok(_) => uart.puts("\n[0] UART is live!\n"),
         Err(_) => loop {
-            asm!("wfe" :::: "volatile"); // If UART fails, abort early
+            llvm_asm!("wfe" :::: "volatile"); // If UART fails, abort early
         },
     }
 
