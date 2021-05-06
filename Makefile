@@ -28,11 +28,6 @@ CARGO_OUTPUT = target/aarch64-unknown-none/release/kernel8
 
 OBJCOPY_ARGS = --strip-all -O binary
 
-CONTAINER_UTILS   = andrerichter/raspi3-utils
-
-DOCKER_CMD        = docker run -it --rm
-DOCKER_ARG_CURDIR = -v $(shell pwd):/work -w /work
-
 .PHONY: all clippy clean objdump nm
 
 all: clean kernel8.img
@@ -44,7 +39,7 @@ kernel8.img: $(CARGO_OUTPUT)
 	cargo objcopy --release -- $(OBJCOPY_ARGS) kernel8.img
 
 clippy:
-	cargo xclippy
+	cargo clippy
 
 clean:
 	cargo clean
@@ -53,7 +48,7 @@ objdump:
 	cargo objdump -- --disassemble --print-imm-hex
 
 llvm:
-	cargo xrustc --release -- --emit=llvm-ir
+	cargo rustc --release -- --emit=llvm-ir
 # => target/aarch64-unknown-none/release/deps/*.ll
 
 nm:
@@ -71,3 +66,5 @@ dump: $(SOURCES)
 
 expand:
 	cargo expand
+# cargo-expand is required: cargo install cargo-expand
+
