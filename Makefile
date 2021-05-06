@@ -43,7 +43,7 @@ $(CARGO_OUTPUT): $(SOURCES)
 	cargo build --release
 
 kernel8.img: $(CARGO_OUTPUT)
-	cargo objcopy -- $(OBJCOPY_ARGS) kernel8.img
+	cargo objcopy --release -- $(OBJCOPY_ARGS) kernel8.img
 
 qemu: all
 	$(DOCKER_CMD) $(DOCKER_ARG_CURDIR) $(CONTAINER_UTILS) \
