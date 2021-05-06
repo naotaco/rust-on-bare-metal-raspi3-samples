@@ -22,16 +22,11 @@
 # SOFTWARE.
 #
 
-TARGET = aarch64-unknown-none
-
 SOURCES = $(wildcard **/*.rs) $(wildcard **/*.S) link.ld
 
-
-XRUSTC_CMD   = cargo xrustc --target=$(TARGET) --release
 CARGO_OUTPUT = target/$(TARGET)/release/kernel8
 
-OBJCOPY        = cargo objcopy --
-OBJCOPY_PARAMS = --strip-all -O binary
+OBJCOPY_ARGS = --strip-all -O binary
 
 CONTAINER_UTILS   = andrerichter/raspi3-utils
 
@@ -45,30 +40,30 @@ DOCKER_EXEC_QEMU     = qemu-system-aarch64 -M raspi3 -kernel kernel8.img
 all: clean kernel8.img
 
 $(CARGO_OUTPUT): $(SOURCES)
-	$(XRUSTC_CMD)
+	cargo build --release
 
 kernel8.img: $(CARGO_OUTPUT)
-	cp $< .
-	$(OBJCOPY) $(OBJCOPY_PARAMS) $< kernel8.img
+	cargo objcopy -- $(OBJCOPY_ARGS) kernel8.img
 
 qemu: all
 	$(DOCKER_CMD) $(DOCKER_ARG_CURDIR) $(CONTAINER_UTILS) \
 	$(DOCKER_EXEC_QEMU) -serial stdio
 
 clippy:
-	cargo xclippy --target=$(TARGET)
+	cargo xclippy
 
 clean:
 	cargo clean
 
 objdump:
-	cargo objdump --target $(TARGET) -- -disassemble -print-imm-hex kernel8_debug
+	cargo objdump -- --disassemble --print-imm-hex
 
 llvm:
-	cargo llvm-ir --target $(TARGET)  kernel8_debug
+	cargo xrustc --release -- --emit=llvm-ir
+# => target/aarch64-unknown-none/release/deps/*.ll
 
 nm:
-	cargo nm --target $(TARGET) -- kernel8_debug | sort
+	cargo nm
 
 gdb: clean $(SOURCES)
 	 cargo xrustc --target=$(TARGET) --release -- -C debuginfo=2
