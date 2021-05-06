@@ -22,66 +22,49 @@
 # SOFTWARE.
 #
 
-TARGET = aarch64-unknown-none
-
 SOURCES = $(wildcard **/*.rs) $(wildcard **/*.S) link.ld
 
+CARGO_OUTPUT = target/aarch64-unknown-none/release/kernel8
 
-XRUSTC_CMD   = cargo xrustc --target=$(TARGET) --release
-CARGO_OUTPUT = target/$(TARGET)/release/kernel8
+OBJCOPY_ARGS = --strip-all -O binary
 
-OBJCOPY        = cargo objcopy --
-OBJCOPY_PARAMS = --strip-all -O binary
-
-CONTAINER_UTILS   = andrerichter/raspi3-utils
-
-DOCKER_CMD        = docker run -it --rm
-DOCKER_ARG_CURDIR = -v $(shell pwd):/work -w /work
-
-DOCKER_EXEC_QEMU     = qemu-system-aarch64 -M raspi3 -kernel kernel8.img
-
-.PHONY: all qemu clippy clean objdump nm
+.PHONY: all clippy clean objdump nm
 
 all: clean kernel8.img
 
 $(CARGO_OUTPUT): $(SOURCES)
-	$(XRUSTC_CMD)
+	cargo build --release
 
 kernel8.img: $(CARGO_OUTPUT)
-	cp $< .
-	$(OBJCOPY) $(OBJCOPY_PARAMS) $< kernel8.img
-
-qemu: all
-	$(DOCKER_CMD) $(DOCKER_ARG_CURDIR) $(CONTAINER_UTILS) \
-	$(DOCKER_EXEC_QEMU) -serial stdio
+	cargo objcopy --release -- $(OBJCOPY_ARGS) kernel8.img
 
 clippy:
-	cargo xclippy --target=$(TARGET)
+	cargo clippy
 
 clean:
 	cargo clean
 
 objdump:
-	cargo objdump --target $(TARGET) -- -disassemble -print-imm-hex kernel8_debug
+	cargo objdump -- --disassemble --print-imm-hex
 
 llvm:
-	cargo llvm-ir --target $(TARGET)  kernel8_debug
+	cargo rustc --release -- --emit=llvm-ir
+# => target/aarch64-unknown-none/release/deps/*.ll
 
 nm:
-	cargo nm --target $(TARGET) -- kernel8_debug | sort
+	cargo nm
 
 gdb: clean $(SOURCES)
-	 cargo xrustc --target=$(TARGET) --release -- -C debuginfo=2
-	 cp target/aarch64-unknown-none/release/kernel8 kernel8_debug
+	 cargo rustc --release -- -C debuginfo=2
+	 cp $(CARGO_OUTPUT) kernel8_debug
 
 gdb-opt0: clean $(SOURCES)
 	$(call gen_gdb,-C debuginfo=2 -C opt-level=0)
 
-dump: clean $(SOURCES)
-	# cargo xrustc --target=$(TARGET) --release -- -C debuginfo=2 -C opt-level=0
-	cargo xrustc --target=$(TARGET) --release -- -C debuginfo=2
-	cp target/aarch64-unknown-none/release/kernel8 kernel8_debug
-	cargo objdump --target $(TARGET) -- -disassemble -print-imm-hex kernel8_debug > dump.s
+dump: $(SOURCES)
+	cargo objdump --release -- --disassemble --print-imm-hex > dump.s
 
 expand:
 	cargo expand
+# cargo-expand is required: cargo install cargo-expand
+
